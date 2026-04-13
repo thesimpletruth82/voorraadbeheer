@@ -17,35 +17,17 @@ const ENTRY_TYPES = [
 ];
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (Auth.isEventAuthed()) {
-    await loadEventData();
-    showStep('step-bar');
-  } else {
-    showStep('step-login');
-  }
+  await Auth.loadActiveEvent();
+  await loadEventData();
+  showStep('step-bar');
 
-  document.getElementById('login-form').addEventListener('submit', handleLogin);
   document.getElementById('submit-btn').addEventListener('click', handleSubmit);
 });
 
 function showStep(stepId) {
-  ['step-login','step-bar','step-type','step-entries'].forEach(s => {
+  ['step-bar','step-type','step-entries'].forEach(s => {
     document.getElementById(s).classList.toggle('hidden', s !== stepId);
   });
-}
-
-async function handleLogin(e) {
-  e.preventDefault();
-  const pw = document.getElementById('event-pw').value;
-  document.getElementById('login-btn').textContent = '...';
-  const ok = await Auth.loginEvent(pw);
-  document.getElementById('login-btn').textContent = 'Inloggen';
-  if (ok) {
-    await loadEventData();
-    showStep('step-bar');
-  } else {
-    document.getElementById('login-error').classList.remove('hidden');
-  }
 }
 
 async function loadEventData() {

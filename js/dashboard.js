@@ -8,42 +8,11 @@ let dState = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
-  if (Auth.isEventAuthed()) {
-    showSection('dashboard-section');
-    await loadDashboard();
-    startAutoRefresh();
-    subscribeRealtime();
-  } else {
-    showSection('login-section');
-  }
-  document.getElementById('login-form').addEventListener('submit', handleLogin);
-  document.getElementById('logout-btn')?.addEventListener('click', () => {
-    Auth.logoutEvent();
-    location.reload();
-  });
+  await Auth.loadActiveEvent();
+  await loadDashboard();
+  startAutoRefresh();
+  subscribeRealtime();
 });
-
-function showSection(id) {
-  ['login-section','dashboard-section'].forEach(s => {
-    document.getElementById(s).classList.toggle('hidden', s !== id);
-  });
-}
-
-async function handleLogin(e) {
-  e.preventDefault();
-  const pw = document.getElementById('event-pw').value;
-  document.getElementById('login-btn').textContent = '...';
-  const ok = await Auth.loginEvent(pw);
-  document.getElementById('login-btn').textContent = 'Bekijken';
-  if (ok) {
-    showSection('dashboard-section');
-    await loadDashboard();
-    startAutoRefresh();
-    subscribeRealtime();
-  } else {
-    document.getElementById('login-error').classList.remove('hidden');
-  }
-}
 
 async function loadDashboard() {
   const sb = getSupabase();

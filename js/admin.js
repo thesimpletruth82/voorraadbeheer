@@ -32,14 +32,9 @@ const DEFAULT_SKUS = [
 
 // ── Init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  if (!Auth.isAdminAuthed()) {
-    showSection('login-section');
-  } else {
-    showSection('main-section');
-    loadData();
-  }
+  showSection('main-section');
+  loadData();
 
-  document.getElementById('login-form').addEventListener('submit', handleLogin);
   document.getElementById('event-form').addEventListener('submit', handleCreateEvent);
   document.getElementById('bar-form').addEventListener('submit', handleCreateBar);
   document.getElementById('sku-form').addEventListener('submit', handleCreateSku);
@@ -116,12 +111,11 @@ async function handleCreateEvent(e) {
   const sb = getSupabase();
   const name = document.getElementById('event-name').value.trim();
   const date = document.getElementById('event-date').value;
-  const password = document.getElementById('event-password').value.trim();
   const useDefaults = document.getElementById('event-use-defaults').checked;
 
   const { data: event, error } = await sb
     .from('events')
-    .insert({ name, date, staff_password: password })
+    .insert({ name, date, staff_password: 'none' })
     .select().single();
   if (error) { alert('Fout: ' + error.message); return; }
 
@@ -225,7 +219,6 @@ function renderEventList() {
         <span class="font-medium">${ev.name}</span>
         <span class="text-sm text-gray-500 ml-2">${formatDate(ev.date)}</span>
         ${ev.is_active ? '<span class="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">Actief</span>' : ''}
-        <div class="text-xs text-gray-400 mt-0.5">Wachtwoord personeel: <strong>${ev.staff_password}</strong></div>
       </div>
       <div class="flex gap-2">
         ${!ev.is_active ? `<button onclick="setActiveEvent('${ev.id}')" class="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Activeer</button>` : ''}

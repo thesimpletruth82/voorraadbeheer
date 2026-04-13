@@ -12,27 +12,8 @@
 </head>
 <body class="bg-gray-100 min-h-screen font-sans">
 
-<!-- Login -->
-<div id="login-section" class="min-h-screen flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
-    <div class="text-center mb-6">
-      <div class="text-4xl mb-2">📊</div>
-      <h1 class="text-xl font-bold text-gray-800">Dashboard</h1>
-      <p class="text-gray-500 text-sm mt-1">Voer het evenementwachtwoord in</p>
-    </div>
-    <form id="login-form" class="space-y-4">
-      <input id="event-pw" type="password" placeholder="Wachtwoord"
-        class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-base text-center focus:border-blue-400 focus:outline-none tracking-widest">
-      <p id="login-error" class="hidden text-red-600 text-sm text-center">Wachtwoord onjuist of geen actief evenement.</p>
-      <button id="login-btn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors">
-        Bekijken
-      </button>
-    </form>
-  </div>
-</div>
-
 <!-- Dashboard -->
-<div id="dashboard-section" class="hidden">
+<div id="dashboard-section">
   <!-- Header -->
   <div class="bg-gray-900 text-white px-6 py-4">
     <div class="max-w-screen-2xl mx-auto flex items-center justify-between flex-wrap gap-3">
@@ -45,10 +26,7 @@
           <span class="live-dot w-2 h-2 rounded-full bg-green-400 inline-block"></span>
           <span class="text-gray-300">Live — bijgewerkt: <strong id="last-updated" class="text-white">—</strong></span>
         </div>
-        <div class="flex gap-3">
-          <a href="/form" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs transition-colors">📝 Formulier</a>
-          <button id="logout-btn" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs transition-colors">Uitloggen</button>
-        </div>
+        <a href="/form" class="bg-gray-700 hover:bg-gray-600 px-3 py-1.5 rounded-lg text-xs transition-colors">📝 Formulier</a>
       </div>
     </div>
   </div>

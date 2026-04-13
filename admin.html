@@ -6,32 +6,12 @@
   <title>Beheer — Festival Voorraadbeheer</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
-    .tab-active { @apply bg-blue-600 text-white; }
     .tab-active { background-color: #2563eb; color: white; }
   </style>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans">
 
-<!-- Login -->
-<div id="login-section" class="min-h-screen flex items-center justify-center p-4">
-  <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
-    <div class="text-center mb-6">
-      <div class="text-4xl mb-2">⚙️</div>
-      <h1 class="text-xl font-bold text-gray-800">Beheer inloggen</h1>
-    </div>
-    <form id="login-form" class="space-y-4">
-      <input id="admin-pw" type="password" placeholder="Admin wachtwoord"
-        class="w-full border-2 border-gray-200 rounded-xl px-4 py-3 text-base focus:border-blue-400 focus:outline-none">
-      <p id="login-error" class="hidden text-red-600 text-sm">Wachtwoord onjuist.</p>
-      <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors">
-        Inloggen
-      </button>
-    </form>
-  </div>
-</div>
-
-<!-- Main -->
-<div id="main-section" class="hidden">
+<div id="main-section">
   <nav class="bg-gray-900 text-white px-6 py-4 flex items-center justify-between">
     <div class="flex items-center gap-3">
       <span class="text-xl">⚙️</span>
@@ -64,8 +44,6 @@
             <input id="event-name" type="text" placeholder="Naam (bijv. Koningsdag Dordrecht 2025)"
               class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" required>
             <input id="event-date" type="date"
-              class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" required>
-            <input id="event-password" type="text" placeholder="Wachtwoord personeel (bijv. konings2025)"
               class="w-full border-2 border-gray-200 rounded-xl px-3 py-2 text-sm focus:border-blue-400 focus:outline-none" required>
             <label class="flex items-center gap-2 text-sm cursor-pointer">
               <input id="event-use-defaults" type="checkbox" checked class="rounded">
