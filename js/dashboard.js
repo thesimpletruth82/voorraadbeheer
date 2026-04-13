@@ -166,6 +166,69 @@ function renderSummaryCards(barId) {
   `;
 }
 
+// ── Split chart HTML helper ────────────────────────────────
+// Builds the inner HTML for a chart card that has regular SKUs on the left
+// and beer tanks in their own labelled box on the right.
+function splitChartInnerHTML(titleHTML, idPrefix, hasRegular, hasBeer) {
+  const regularPart = hasRegular
+    ? `<div style="flex:1;min-width:0"><canvas id="${idPrefix}-reg"></canvas></div>`
+    : '';
+
+  const beerPart = hasBeer
+    ? `<div style="
+          background:rgba(245,158,11,.06);
+          border:1px solid rgba(245,158,11,.18);
+          border-radius:10px;
+          padding:12px 14px;
+          min-width:180px;
+          max-width:260px;
+          flex-shrink:0">
+        <div style="font-size:10px;font-weight:700;color:#d97706;text-transform:uppercase;
+                    letter-spacing:.06em;margin-bottom:10px">🍺 Biertank</div>
+        <canvas id="${idPrefix}-beer"></canvas>
+      </div>`
+    : '';
+
+  return `${titleHTML}
+    <div style="display:flex;align-items:flex-start;gap:16px">
+      ${regularPart}${beerPart}
+    </div>`;
+}
+
+// Calculates available/used arrays for a set of SKUs scoped to one or more bars
+function calcSkuData(skus, barIds) {
+  const available = skus.map(sku => {
+    return barIds.reduce((total, bid) => {
+      const e = dState.entries.filter(x => x.bar_id === bid && x.sku_id === sku.id);
+      const sum = t => e.filter(x => x.entry_type === t).reduce((a, x) => a + Number(x.quantity), 0);
+      return total + sum('initial_count') + sum('delivery') + sum('transfer_in');
+    }, 0);
+  });
+  const used = skus.map(sku => {
+    return barIds.reduce((total, bid) => {
+      const e = dState.entries.filter(x => x.bar_id === bid && x.sku_id === sku.id);
+      return total + e.filter(x => x.entry_type === 'tap_out').reduce((a, x) => a + Number(x.quantity), 0);
+    }, 0);
+  });
+  return { available, used };
+}
+
+// Builds (or rebuilds) the regular + beer charts for a given idPrefix
+function mountSplitCharts(idPrefix, regularSkus, beerSkus, barIds) {
+  if (regularSkus.length) {
+    const key = `${idPrefix}-reg`;
+    if (_charts[key]) _charts[key].destroy();
+    const { available, used } = calcSkuData(regularSkus, barIds);
+    _charts[key] = buildChart(`${idPrefix}-reg`, regularSkus, available, used);
+  }
+  if (beerSkus.length) {
+    const key = `${idPrefix}-beer`;
+    if (_charts[key]) _charts[key].destroy();
+    const { available, used } = calcSkuData(beerSkus, barIds);
+    _charts[key] = buildChart(`${idPrefix}-beer`, beerSkus, available, used);
+  }
+}
+
 // ── Main view ──────────────────────────────────────────────
 function renderMainCharts() {
   renderTotaalTerrein();
@@ -181,31 +244,15 @@ function renderTotaalTerrein() {
     return;
   }
 
-  // Aggregate all bars for each SKU
-  const regularSkus = dState.skus.filter(s => !s.is_beer_tank);
-  const beerSkus    = dState.skus.filter(s => s.is_beer_tank);
-  const allSkus     = [...regularSkus, ...beerSkus];
+  const regular = dState.skus.filter(s => !s.is_beer_tank);
+  const beer    = dState.skus.filter(s => s.is_beer_tank);
+  const barIds  = dState.bars.map(b => b.id);
 
-  const availableArr = allSkus.map(sku => {
-    return dState.bars.reduce((total, bar) => {
-      const e = dState.entries.filter(x => x.bar_id === bar.id && x.sku_id === sku.id);
-      const sum = t => e.filter(x => x.entry_type === t).reduce((a, x) => a + Number(x.quantity), 0);
-      return total + sum('initial_count') + sum('delivery') + sum('transfer_in');
-    }, 0);
-  });
+  container.innerHTML = `<div class="chart-card">${
+    splitChartInnerHTML('', 'chart-totaal', regular.length > 0, beer.length > 0)
+  }</div>`;
 
-  const usedArr = allSkus.map(sku => {
-    return dState.bars.reduce((total, bar) => {
-      const e = dState.entries.filter(x => x.bar_id === bar.id && x.sku_id === sku.id);
-      return total + e.filter(x => x.entry_type === 'tap_out').reduce((a, x) => a + Number(x.quantity), 0);
-    }, 0);
-  });
-
-  container.innerHTML = `<div class="chart-card"><canvas id="chart-totaal"></canvas></div>`;
-
-  const key = 'totaal';
-  if (_charts[key]) _charts[key].destroy();
-  _charts[key] = buildChart('chart-totaal', allSkus, availableArr, usedArr);
+  mountSplitCharts('chart-totaal', regular, beer, barIds);
 }
 
 function renderBarCharts() {
@@ -222,17 +269,17 @@ function renderBarCharts() {
     const barSkus   = dState.skus.filter(s => barSkuIds.includes(s.id));
     const regular   = barSkus.filter(s => !s.is_beer_tank);
     const beer      = barSkus.filter(s => s.is_beer_tank);
-    const allSkus   = [...regular, ...beer];
 
-    if (!allSkus.length) return '';
+    if (!regular.length && !beer.length) return '';
 
-    return `<div class="chart-card clickable" onclick="location.hash='#bar-${bar.id}'">
-      <div class="chart-card-title">
-        ${bar.name}
-        <span class="chart-card-hint">Klik voor detail →</span>
-      </div>
-      <canvas id="chart-bar-${bar.id}"></canvas>
+    const titleHTML = `<div class="chart-card-title">
+      ${bar.name}
+      <span class="chart-card-hint">Klik voor detail →</span>
     </div>`;
+
+    return `<div class="chart-card clickable" onclick="location.hash='#bar-${bar.id}'">${
+      splitChartInnerHTML(titleHTML, `chart-bar-${bar.id}`, regular.length > 0, beer.length > 0)
+    }</div>`;
   }).join('');
 
   dState.bars.forEach(bar => {
@@ -240,23 +287,9 @@ function renderBarCharts() {
     const barSkus   = dState.skus.filter(s => barSkuIds.includes(s.id));
     const regular   = barSkus.filter(s => !s.is_beer_tank);
     const beer      = barSkus.filter(s => s.is_beer_tank);
-    const allSkus   = [...regular, ...beer];
 
-    if (!allSkus.length) return;
-
-    const availableArr = allSkus.map(sku => {
-      const e = dState.entries.filter(x => x.bar_id === bar.id && x.sku_id === sku.id);
-      const sum = t => e.filter(x => x.entry_type === t).reduce((a, x) => a + Number(x.quantity), 0);
-      return sum('initial_count') + sum('delivery') + sum('transfer_in');
-    });
-    const usedArr = allSkus.map(sku => {
-      const e = dState.entries.filter(x => x.bar_id === bar.id && x.sku_id === sku.id);
-      return e.filter(x => x.entry_type === 'tap_out').reduce((a, x) => a + Number(x.quantity), 0);
-    });
-
-    const key = `bar-${bar.id}`;
-    if (_charts[key]) _charts[key].destroy();
-    _charts[key] = buildChart(`chart-bar-${bar.id}`, allSkus, availableArr, usedArr);
+    if (!regular.length && !beer.length) return;
+    mountSplitCharts(`chart-bar-${bar.id}`, regular, beer, [bar.id]);
   });
 }
 
@@ -279,28 +312,17 @@ function renderDetailChart(bar) {
   const barSkus   = dState.skus.filter(s => barSkuIds.includes(s.id));
   const regular   = barSkus.filter(s => !s.is_beer_tank);
   const beer      = barSkus.filter(s => s.is_beer_tank);
-  const allSkus   = [...regular, ...beer];
 
-  if (!allSkus.length) {
+  if (!regular.length && !beer.length) {
     container.innerHTML = '<p style="color:#475569;padding:12px 28px">Geen producten toegewezen.</p>';
     return;
   }
 
-  container.innerHTML = `<div class="chart-card"><canvas id="chart-detail-${bar.id}"></canvas></div>`;
+  container.innerHTML = `<div class="chart-card">${
+    splitChartInnerHTML('', `chart-detail-${bar.id}`, regular.length > 0, beer.length > 0)
+  }</div>`;
 
-  const availableArr = allSkus.map(sku => {
-    const e = dState.entries.filter(x => x.bar_id === bar.id && x.sku_id === sku.id);
-    const sum = t => e.filter(x => x.entry_type === t).reduce((a, x) => a + Number(x.quantity), 0);
-    return sum('initial_count') + sum('delivery') + sum('transfer_in');
-  });
-  const usedArr = allSkus.map(sku => {
-    const e = dState.entries.filter(x => x.bar_id === bar.id && x.sku_id === sku.id);
-    return e.filter(x => x.entry_type === 'tap_out').reduce((a, x) => a + Number(x.quantity), 0);
-  });
-
-  const key = `detail-${bar.id}`;
-  if (_charts[key]) _charts[key].destroy();
-  _charts[key] = buildChart(`chart-detail-${bar.id}`, allSkus, availableArr, usedArr);
+  mountSplitCharts(`chart-detail-${bar.id}`, regular, beer, [bar.id]);
 }
 
 function renderDetailTable(bar) {
