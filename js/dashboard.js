@@ -293,26 +293,30 @@ function buildChart(canvasId, skus, barId, calcFn) {
     used.push(vals.used);
   });
 
+  const remaining = available.map((a, i) => Math.max(0, a - used[i]));
+
   return new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: {
       labels,
       datasets: [
         {
-          label: 'Totaal beschikbaar',
-          data: available,
-          backgroundColor: 'rgba(59, 130, 246, 0.75)',
-          borderColor: 'rgba(37, 99, 235, 1)',
-          borderWidth: 1,
-          borderRadius: 4,
-        },
-        {
           label: 'Gebruikt',
           data: used,
-          backgroundColor: 'rgba(249, 115, 22, 0.75)',
-          borderColor: 'rgba(234, 88, 12, 1)',
+          backgroundColor: 'rgba(220, 38, 38, 0.8)',
+          borderColor: 'rgba(185, 28, 28, 1)',
+          borderWidth: 1,
+          borderRadius: 0,
+          stack: 'stock',
+        },
+        {
+          label: 'Resterend',
+          data: remaining,
+          backgroundColor: 'rgba(22, 163, 74, 0.8)',
+          borderColor: 'rgba(15, 118, 54, 1)',
           borderWidth: 1,
           borderRadius: 4,
+          stack: 'stock',
         },
       ],
     },
@@ -326,11 +330,17 @@ function buildChart(canvasId, skus, barId, calcFn) {
               const sku = skus[ctx.dataIndex];
               return `${ctx.dataset.label}: ${ctx.raw.toLocaleString('nl-NL')} ${sku.unit}`;
             },
+            footer: (items) => {
+              const i = items[0].dataIndex;
+              return `Totaal: ${available[i].toLocaleString('nl-NL')} ${skus[i].unit}`;
+            },
           },
         },
       },
       scales: {
+        x: { stacked: true },
         y: {
+          stacked: true,
           beginAtZero: true,
           ticks: { precision: 0 },
         },
