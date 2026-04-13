@@ -8,7 +8,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
     @keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(.85)} }
-    @keyframes fade-in { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes fade-in    { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 
     body {
       background: #080d1a;
@@ -16,8 +16,6 @@
       font-family: system-ui, -apple-system, sans-serif;
       min-height: 100vh;
     }
-
-    /* Ambient background glow */
     body::before {
       content: '';
       position: fixed; inset: 0; pointer-events: none; z-index: 0;
@@ -25,10 +23,9 @@
         radial-gradient(ellipse 80% 50% at 10% 0%, rgba(59,130,246,.07) 0%, transparent 60%),
         radial-gradient(ellipse 60% 50% at 90% 100%, rgba(139,92,246,.05) 0%, transparent 60%);
     }
-
     #dashboard-section { position: relative; z-index: 1; }
 
-    /* ── Header ──────────────────────────────────────────── */
+    /* ── Header ── */
     .dash-header {
       background: rgba(8,13,26,.92);
       border-bottom: 1px solid rgba(255,255,255,.06);
@@ -64,7 +61,7 @@
     }
     .header-badge:hover { background: rgba(255,255,255,.11); }
 
-    /* ── Stat cards ─────────────────────────────────────── */
+    /* ── Stat cards ── */
     .stats-row {
       max-width: 1600px; margin: 0 auto;
       padding: 24px 28px 0;
@@ -75,20 +72,75 @@
     .stat-card {
       background: rgba(255,255,255,.04);
       border: 1px solid rgba(255,255,255,.07);
-      border-radius: 14px;
-      padding: 18px 20px;
+      border-radius: 14px; padding: 18px 20px;
       animation: fade-in .4s ease both;
     }
     .stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: .06em; }
     .stat-value { font-size: 26px; font-weight: 700; color: #f1f5f9; margin: 6px 0 2px; }
-    .stat-sub { font-size: 12px; color: #64748b; }
-    .stat-icon {
+    .stat-sub   { font-size: 12px; color: #64748b; }
+    .stat-icon  {
       width: 36px; height: 36px; border-radius: 9px;
       display: flex; align-items: center; justify-content: center;
       font-size: 17px; margin-bottom: 12px;
     }
 
-    /* ── Legend ──────────────────────────────────────────── */
+    /* ── Section wrapper ── */
+    .section {
+      max-width: 1600px; margin: 0 auto;
+      padding: 24px 28px 0;
+    }
+    .section-heading {
+      display: flex; align-items: baseline; gap: 12px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid rgba(255,255,255,.05);
+      margin-bottom: 20px;
+    }
+    .section-heading h2 {
+      font-size: 13px; font-weight: 600;
+      color: #94a3b8; text-transform: uppercase; letter-spacing: .07em;
+    }
+    .section-heading p { font-size: 12px; color: #475569; }
+
+    /* ── Chart grid ── */
+    .charts-grid {
+      display: grid; gap: 20px;
+      grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+    }
+    .chart-card {
+      background: rgba(255,255,255,.03);
+      border: 1px solid rgba(255,255,255,.07);
+      border-radius: 16px; padding: 20px 22px;
+      animation: fade-in .5s ease both;
+    }
+    .chart-card.clickable {
+      cursor: pointer; transition: border-color .2s, background .2s;
+    }
+    .chart-card.clickable:hover {
+      border-color: rgba(59,130,246,.4);
+      background: rgba(59,130,246,.05);
+    }
+    .chart-card-title {
+      font-size: 14px; font-weight: 600; color: #e2e8f0; margin-bottom: 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .chart-card-hint { font-size: 11px; color: #334155; }
+
+    /* ── Detail sub-nav ── */
+    .detail-subnav {
+      max-width: 1600px; margin: 0 auto;
+      padding: 20px 28px 0;
+      display: flex; align-items: center; gap: 16px;
+    }
+    .back-btn {
+      background: rgba(255,255,255,.06);
+      border: 1px solid rgba(255,255,255,.09);
+      color: #94a3b8; padding: 7px 16px; border-radius: 8px;
+      font-size: 13px; cursor: pointer; transition: background .15s;
+    }
+    .back-btn:hover { background: rgba(255,255,255,.11); color: #f1f5f9; }
+    .detail-bar-title { font-size: 20px; font-weight: 700; color: #f1f5f9; }
+
+    /* ── Legend ── */
     .legend-bar {
       max-width: 1600px; margin: 0 auto;
       padding: 14px 28px;
@@ -96,24 +148,19 @@
       font-size: 12px; color: #475569;
       border-bottom: 1px solid rgba(255,255,255,.04);
     }
-    .legend-dot {
-      width: 10px; height: 10px; border-radius: 3px; display: inline-block;
-    }
+    .legend-dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 
-    /* ── Bars grid ───────────────────────────────────────── */
+    /* ── Bar table card ── */
     .bars-grid {
       max-width: 1600px; margin: 0 auto;
-      padding: 24px 28px;
+      padding: 24px 28px 40px;
       display: grid; gap: 20px;
       grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
     }
-
-    /* ── Bar card ────────────────────────────────────────── */
     .bar-card {
       background: rgba(255,255,255,.03);
       border: 1px solid rgba(255,255,255,.07);
-      border-radius: 16px;
-      overflow: hidden;
+      border-radius: 16px; overflow: hidden;
       animation: fade-in .5s ease both;
     }
     .bar-card-header {
@@ -127,12 +174,8 @@
       width: 8px; height: 8px; border-radius: 50%; background: #3b82f6;
       box-shadow: 0 0 6px rgba(59,130,246,.5);
     }
-
-    /* ── Table ───────────────────────────────────────────── */
     .stock-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    .stock-table thead tr {
-      background: rgba(0,0,0,.25);
-    }
+    .stock-table thead tr { background: rgba(0,0,0,.25); }
     .stock-table thead th {
       padding: 9px 14px; text-align: right;
       font-size: 10px; font-weight: 600;
@@ -147,55 +190,19 @@
     .stock-table tbody tr:hover { background: rgba(255,255,255,.03) !important; }
     .stock-table td { padding: 10px 14px; text-align: right; }
     .stock-table td:first-child { text-align: left; font-weight: 500; color: #e2e8f0; }
-
     .row-green  { background: rgba(16,185,129,.07); }
     .row-yellow { background: rgba(245,158,11,.07); }
     .row-red    { background: rgba(239,68,68,.07); }
 
-    /* ── Charts section ──────────────────────────────────── */
-    .charts-section {
-      max-width: 1600px; margin: 0 auto;
-      padding: 0 28px 40px;
-    }
-    .charts-heading {
-      padding: 20px 0 18px;
-      border-top: 1px solid rgba(255,255,255,.06);
-      display: flex; align-items: baseline; gap: 12px;
-    }
-    .charts-heading h2 {
-      font-size: 13px; font-weight: 600;
-      color: #94a3b8; text-transform: uppercase; letter-spacing: .07em;
-    }
-    .charts-heading p { font-size: 12px; color: #475569; }
-    .charts-grid {
-      display: grid; gap: 20px;
-      grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
-    }
-    .chart-card {
-      background: rgba(255,255,255,.03);
-      border: 1px solid rgba(255,255,255,.07);
-      border-radius: 16px;
-      padding: 20px 22px;
-      animation: fade-in .5s ease both;
-    }
-    .chart-card-title {
-      font-size: 14px; font-weight: 600; color: #e2e8f0; margin-bottom: 16px;
-    }
-    .beer-divider {
-      margin-top: 20px; padding-top: 18px;
-      border-top: 1px solid rgba(255,255,255,.06);
-    }
-    .beer-divider-label {
-      font-size: 11px; font-weight: 600; color: #f59e0b;
-      text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px;
-    }
+    /* ── Bottom spacing ── */
+    .pb-section { padding-bottom: 48px; }
   </style>
 </head>
 <body>
 
 <div id="dashboard-section">
 
-  <!-- Header -->
+  <!-- ── Header (always visible) ── -->
   <div class="dash-header">
     <div class="dash-header-inner">
       <div style="display:flex;align-items:center;gap:14px">
@@ -216,34 +223,68 @@
     </div>
   </div>
 
-  <!-- Stat cards -->
+  <!-- ── Stat cards (updated per view) ── -->
   <div class="stats-row" id="stat-cards"></div>
 
-  <!-- Legend -->
-  <div class="legend-bar">
-    <span style="font-weight:600;color:#94a3b8">Status rij:</span>
-    <span style="display:flex;align-items:center;gap:6px">
-      <span class="legend-dot" style="background:rgba(16,185,129,.4);border:1px solid rgba(16,185,129,.5)"></span>&gt; 3 uur
-    </span>
-    <span style="display:flex;align-items:center;gap:6px">
-      <span class="legend-dot" style="background:rgba(245,158,11,.4);border:1px solid rgba(245,158,11,.5)"></span>1–3 uur
-    </span>
-    <span style="display:flex;align-items:center;gap:6px">
-      <span class="legend-dot" style="background:rgba(239,68,68,.4);border:1px solid rgba(239,68,68,.5)"></span>&lt; 1 uur
-    </span>
-    <span style="margin-left:auto;font-size:11px">30-min blokken · vernieuwd elke 30 sec</span>
+  <!-- ══════════════════════════════════════════
+       MAIN VIEW
+  ══════════════════════════════════════════ -->
+  <div id="main-view">
+
+    <!-- Totaal Terrein -->
+    <div class="section" style="padding-top:28px">
+      <div class="section-heading">
+        <h2>🏟️ Totaal Terrein</h2>
+        <p>Alle bars gecombineerd</p>
+      </div>
+      <div id="totaal-chart-container"></div>
+    </div>
+
+    <!-- Per bar (clickable) -->
+    <div class="section" style="padding-top:28px;padding-bottom:48px">
+      <div class="section-heading">
+        <h2>📊 Per bar</h2>
+        <p>Klik op een bar voor de gedetailleerde weergave</p>
+      </div>
+      <div class="charts-grid" id="bar-charts-container"></div>
+    </div>
+
   </div>
 
-  <!-- Bars grid -->
-  <div class="bars-grid" id="bars-container"></div>
+  <!-- ══════════════════════════════════════════
+       DETAIL VIEW (hidden by default)
+  ══════════════════════════════════════════ -->
+  <div id="detail-view" style="display:none">
 
-  <!-- Charts section -->
-  <div class="charts-section">
-    <div class="charts-heading">
-      <h2>📊 Verbruik per bar</h2>
-      <p>Totaal beschikbaar vs. gebruikt</p>
+    <!-- Sub-navigation -->
+    <div class="detail-subnav">
+      <button class="back-btn" onclick="location.hash=''">← Alle bars</button>
+      <span class="detail-bar-title" id="detail-bar-name"></span>
     </div>
-    <div class="charts-grid" id="charts-container"></div>
+
+    <!-- Bar chart -->
+    <div class="section" style="padding-top:24px;padding-bottom:28px">
+      <div id="detail-chart-container"></div>
+    </div>
+
+    <!-- Legend -->
+    <div class="legend-bar">
+      <span style="font-weight:600;color:#94a3b8">Status rij:</span>
+      <span style="display:flex;align-items:center;gap:6px">
+        <span class="legend-dot" style="background:rgba(16,185,129,.4);border:1px solid rgba(16,185,129,.5)"></span>&gt; 3 uur
+      </span>
+      <span style="display:flex;align-items:center;gap:6px">
+        <span class="legend-dot" style="background:rgba(245,158,11,.4);border:1px solid rgba(245,158,11,.5)"></span>1–3 uur
+      </span>
+      <span style="display:flex;align-items:center;gap:6px">
+        <span class="legend-dot" style="background:rgba(239,68,68,.4);border:1px solid rgba(239,68,68,.5)"></span>&lt; 1 uur
+      </span>
+      <span style="margin-left:auto;font-size:11px">30-min blokken · vernieuwd elke 30 sec</span>
+    </div>
+
+    <!-- Stock table -->
+    <div class="bars-grid" id="detail-table-container"></div>
+
   </div>
 
 </div>
