@@ -262,14 +262,8 @@ function renderCharts() {
         beerSkus,
         bar.id,
         (sku, e) => {
-          const levels = e
-            .filter(x => x.entry_type === 'beer_tank_level' && x.beer_tank_liters != null)
-            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
-          const available = levels.length ? Number(levels[0].beer_tank_liters) : 0;
-          const used = levels.length >= 2
-            ? Math.max(0, Number(levels[0].beer_tank_liters) - Number(levels[levels.length - 1].beer_tank_liters))
-            : e.filter(x => x.entry_type === 'tap_out').reduce((a, x) => a + Number(x.quantity), 0);
-          return { available, used };
+          const sum = t => e.filter(x => x.entry_type === t).reduce((a, x) => a + Number(x.quantity), 0);
+          return { available: sum('initial_count') + sum('delivery') + sum('transfer_in'), used: sum('tap_out') };
         }
       );
     }
