@@ -7,6 +7,8 @@ let dState = {
   refreshInterval: null,
 };
 
+const _charts = {}; // barId -> Chart instance
+
 document.addEventListener('DOMContentLoaded', async () => {
   await Auth.loadActiveEvent();
   await loadDashboard();
@@ -49,6 +51,7 @@ async function loadDashboard() {
   document.getElementById('last-updated').textContent = new Date().toLocaleTimeString('nl-NL');
 
   renderDashboard();
+  renderCharts();
 }
 
 function renderDashboard() {
@@ -209,6 +212,131 @@ function formatTimeToEmpty(hours) {
   if (hours < 1) return `<span class="text-red-600 font-bold">${timeStr}</span>`;
   if (hours < 3) return `<span class="text-yellow-600 font-bold">${timeStr}</span>`;
   return `<span class="text-green-700">${timeStr}</span>`;
+}
+
+// ── Charts ─────────────────────────────────────────────────
+function renderCharts() {
+  const container = document.getElementById('charts-container');
+  if (!dState.bars.length) { container.innerHTML = ''; return; }
+
+  container.innerHTML = dState.bars.map(bar => {
+    const barSkuIds = dState.barSkus[bar.id] || [];
+    const barSkus = dState.skus.filter(s => barSkuIds.includes(s.id));
+    const regularSkus = barSkus.filter(s => !s.is_beer_tank);
+    const beerSkus = barSkus.filter(s => s.is_beer_tank);
+
+    const regularCanvas = regularSkus.length
+      ? `<canvas id="chart-reg-${bar.id}"></canvas>` : '';
+    const beerCanvas = beerSkus.length
+      ? `<div class="mt-5 pt-5 border-t border-gray-100"><p class="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">🍺 Biertank (liters)</p><canvas id="chart-beer-${bar.id}"></canvas></div>` : '';
+
+    return `<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
+      <h3 class="font-semibold text-gray-800 mb-4">${bar.name}</h3>
+      ${regularCanvas}${beerCanvas}
+    </div>`;
+  }).join('');
+
+  dState.bars.forEach(bar => {
+    const barSkuIds = dState.barSkus[bar.id] || [];
+    const barSkus = dState.skus.filter(s => barSkuIds.includes(s.id));
+
+    const regularSkus = barSkus.filter(s => !s.is_beer_tank);
+    const beerSkus = barSkus.filter(s => s.is_beer_tank);
+
+    if (regularSkus.length) {
+      const key = `reg-${bar.id}`;
+      if (_charts[key]) _charts[key].destroy();
+      _charts[key] = buildChart(
+        `chart-reg-${bar.id}`,
+        regularSkus,
+        bar.id,
+        (sku, e) => {
+          const sum = t => e.filter(x => x.entry_type === t).reduce((a, x) => a + Number(x.quantity), 0);
+          return { available: sum('initial_count') + sum('delivery') + sum('transfer_in'), used: sum('tap_out') };
+        }
+      );
+    }
+
+    if (beerSkus.length) {
+      const key = `beer-${bar.id}`;
+      if (_charts[key]) _charts[key].destroy();
+      _charts[key] = buildChart(
+        `chart-beer-${bar.id}`,
+        beerSkus,
+        bar.id,
+        (sku, e) => {
+          const levels = e
+            .filter(x => x.entry_type === 'beer_tank_level' && x.beer_tank_liters != null)
+            .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+          const available = levels.length ? Number(levels[0].beer_tank_liters) : 0;
+          const used = levels.length >= 2
+            ? Math.max(0, Number(levels[0].beer_tank_liters) - Number(levels[levels.length - 1].beer_tank_liters))
+            : e.filter(x => x.entry_type === 'tap_out').reduce((a, x) => a + Number(x.quantity), 0);
+          return { available, used };
+        }
+      );
+    }
+  });
+}
+
+function buildChart(canvasId, skus, barId, calcFn) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return null;
+
+  const labels = skus.map(s => s.name);
+  const available = [], used = [];
+
+  skus.forEach(sku => {
+    const e = dState.entries.filter(x => x.bar_id === barId && x.sku_id === sku.id);
+    const vals = calcFn(sku, e);
+    available.push(vals.available);
+    used.push(vals.used);
+  });
+
+  return new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          label: 'Totaal beschikbaar',
+          data: available,
+          backgroundColor: 'rgba(59, 130, 246, 0.75)',
+          borderColor: 'rgba(37, 99, 235, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+        {
+          label: 'Gebruikt',
+          data: used,
+          backgroundColor: 'rgba(249, 115, 22, 0.75)',
+          borderColor: 'rgba(234, 88, 12, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const sku = skus[ctx.dataIndex];
+              return `${ctx.dataset.label}: ${ctx.raw.toLocaleString('nl-NL')} ${sku.unit}`;
+            },
+          },
+        },
+      },
+      scales: {
+        y: {
+          beginAtZero: true,
+          ticks: { precision: 0 },
+        },
+      },
+    },
+  });
 }
 
 // ── Auto-refresh & realtime ────────────────────────────────

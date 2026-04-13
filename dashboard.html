@@ -46,8 +46,20 @@
   <div id="bars-container" class="max-w-screen-2xl mx-auto p-6 grid gap-6"
     style="grid-template-columns: repeat(auto-fill, minmax(420px, 1fr))">
   </div>
+
+  <!-- Charts section -->
+  <div class="max-w-screen-2xl mx-auto px-6 pb-8">
+    <div class="border-t border-gray-200 pt-6 mb-5">
+      <h2 class="text-base font-semibold text-gray-700 uppercase tracking-wide">📊 Verbruik per bar</h2>
+      <p class="text-xs text-gray-400 mt-1">Totaal beschikbaar (begintelling + leveringen) vs. gebruikt</p>
+    </div>
+    <div id="charts-container" class="grid gap-6"
+      style="grid-template-columns: repeat(auto-fill, minmax(480px, 1fr))">
+    </div>
+  </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/js/config.js"></script>
 <script src="/js/auth.js"></script>
