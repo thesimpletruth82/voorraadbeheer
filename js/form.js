@@ -17,7 +17,16 @@ const ENTRY_TYPES = [
 ];
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await Auth.loadActiveEvent();
+  const ok = await Auth.loadActiveEvent();
+  if (!ok) {
+    document.body.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center">
+      <div><div style="font-size:48px;margin-bottom:12px">⚠️</div>
+        <h1 style="font-size:18px;font-weight:700;color:#1e293b;margin-bottom:8px">Geen actief evenement</h1>
+        <p style="color:#64748b;font-size:14px;margin-bottom:16px">Ga naar Beheer en activeer eerst een evenement.</p>
+        <a href="/admin" style="color:#3b82f6;font-weight:600;font-size:14px">→ Naar Beheer</a>
+      </div></div>`;
+    return;
+  }
   await loadEventData();
   showStep('step-bar');
 

@@ -10,7 +10,17 @@ let dState = {
 const _charts = {}; // barId -> Chart instance
 
 document.addEventListener('DOMContentLoaded', async () => {
-  await Auth.loadActiveEvent();
+  const ok = await Auth.loadActiveEvent();
+  if (!ok) {
+    document.getElementById('dashboard-section').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center">
+        <div><div style="font-size:48px;margin-bottom:12px">⚠️</div>
+          <h1 style="font-size:18px;font-weight:700;color:#f1f5f9;margin-bottom:8px">Geen actief evenement</h1>
+          <p style="color:#64748b;font-size:14px;margin-bottom:16px">Ga naar Beheer en activeer eerst een evenement.</p>
+          <a href="/admin" style="color:#3b82f6;font-weight:600;font-size:14px">→ Naar Beheer</a>
+        </div></div>`;
+    return;
+  }
   await loadDashboard();
   startAutoRefresh();
   subscribeRealtime();
@@ -182,29 +192,29 @@ function renderSkuRow(barId, sku) {
     // Primary value: calculated from entries (initial − tap_out), same as all other SKUs
     const pct = initial > 0 ? Math.min(100, Math.round((current / initial) * 100)) : null;
 
+    const barColor = pct > 50 ? '#10b981' : pct > 20 ? '#f59e0b' : '#ef4444';
     currentDisplay = `<div>${current.toLocaleString('nl-NL')} L</div>
-       ${pct != null ? `<div class="flex items-center gap-1 mt-1">
-         <div class="w-16 bg-gray-200 rounded-full h-2">
-           <div class="h-2 rounded-full ${pct > 50 ? 'bg-green-500' : pct > 20 ? 'bg-yellow-400' : 'bg-red-500'}"
-                style="width:${pct}%"></div>
+       ${pct != null ? `<div style="display:flex;align-items:center;gap:6px;margin-top:4px">
+         <div style="width:64px;background:rgba(255,255,255,.1);border-radius:9999px;height:6px;overflow:hidden">
+           <div style="height:100%;border-radius:9999px;background:${barColor};width:${pct}%"></div>
          </div>
-         <span class="text-xs text-gray-500">${pct}%</span>
+         <span style="font-size:11px;color:#64748b">${pct}%</span>
        </div>` : ''}`;
 
     burnDisplay = beerBurnRate != null
       ? `${Math.round(beerBurnRate)} L/u`
-      : (burnRate > 0 ? `${Math.round(burnRate)} L/u` : '<span class="text-gray-300">—</span>');
+      : (burnRate > 0 ? `${Math.round(burnRate)} L/u` : '<span style="color:#334155">—</span>');
 
     return buildRow(sku.name, statusColor,
-      `${initial} ${sku.unit}`, tapOut || '—', currentDisplay, burnDisplay,
+      `${initial} ${sku.unit}`, tapOut, currentDisplay, burnDisplay,
       formatTimeToEmpty(timeToEmpty), sku.is_beer_tank);
   }
 
-  burnDisplay = burnRate > 0 ? `${burnRate.toFixed(1)}/u` : '<span class="text-gray-300">—</span>';
+  burnDisplay = burnRate > 0 ? `${burnRate.toFixed(1)}/u` : '<span style="color:#334155">—</span>';
   currentDisplay = `${current} ${sku.unit}`;
 
   return buildRow(sku.name, statusColor,
-    `${initial} ${sku.unit}`, tapOut || '—', currentDisplay, burnDisplay,
+    `${initial} ${sku.unit}`, tapOut, currentDisplay, burnDisplay,
     formatTimeToEmpty(timeToEmpty), false);
 }
 

@@ -5,7 +5,7 @@ CREATE TABLE IF NOT EXISTS events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
   date DATE NOT NULL,
-  staff_password TEXT NOT NULL,
+  staff_password TEXT DEFAULT 'none',
   start_time TIMESTAMPTZ,
   is_active BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
