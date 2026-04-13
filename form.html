@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Voorraad invoer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    input[type=number]::-webkit-inner-spin-button { opacity: 1; }
+    body { -webkit-tap-highlight-color: transparent; }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+
+<!-- Toast -->
+<div id="toast" class="hidden fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white font-semibold px-6 py-3 rounded-xl shadow-lg transition-opacity duration-300"></div>
+
+<!-- Login -->
+<div id="step-login" class="min-h-screen flex items-center justify-center p-4">
+  <div class="bg-white rounded-2xl shadow-lg p-8 w-full max-w-sm">
+    <div class="text-center mb-6">
+      <div class="text-4xl mb-2">📝</div>
+      <h1 class="text-xl font-bold text-gray-800">Voorraad invoer</h1>
+      <p class="text-gray-500 text-sm mt-1">Voer het evenementwachtwoord in</p>
+    </div>
+    <form id="login-form" class="space-y-4">
+      <input id="event-pw" type="text" inputmode="text" placeholder="Wachtwoord"
+        autocomplete="off" autocorrect="off" autocapitalize="off"
+        class="w-full border-2 border-gray-200 rounded-xl px-4 py-4 text-lg text-center focus:border-blue-400 focus:outline-none tracking-widest">
+      <p id="login-error" class="hidden text-red-600 text-sm text-center">Wachtwoord onjuist of geen actief evenement.</p>
+      <button id="login-btn" type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 text-lg rounded-xl transition-colors">
+        Inloggen
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- Step: Select Bar -->
+<div id="step-bar" class="hidden min-h-screen">
+  <div class="bg-gray-900 text-white px-5 py-4">
+    <p class="text-xs text-gray-400 uppercase tracking-wide">Evenement</p>
+    <h1 id="event-title" class="text-lg font-bold">—</h1>
+  </div>
+  <div class="p-4">
+    <h2 class="text-base font-semibold text-gray-700 mb-3">Welke bar ben jij?</h2>
+    <div id="bar-buttons" class="space-y-2"></div>
+  </div>
+</div>
+
+<!-- Step: Select Entry Type -->
+<div id="step-type" class="hidden min-h-screen">
+  <div class="bg-gray-900 text-white px-5 py-4 flex items-center justify-between">
+    <div>
+      <p class="text-xs text-gray-400 uppercase tracking-wide">Jouw bar</p>
+      <h1 id="selected-bar-name" class="text-lg font-bold">—</h1>
+    </div>
+    <button onclick="showStep('step-bar')" class="text-gray-400 hover:text-white text-sm">Wissel bar</button>
+  </div>
+  <div class="p-4">
+    <h2 class="text-base font-semibold text-gray-700 mb-3">Wat wil je invoeren?</h2>
+    <div id="type-buttons" class="space-y-2"></div>
+  </div>
+</div>
+
+<!-- Step: Entry form -->
+<div id="step-entries" class="hidden min-h-screen pb-24">
+  <div class="bg-gray-900 text-white px-5 py-4 flex items-center justify-between">
+    <div>
+      <p id="entry-type-label" class="text-lg font-bold">—</p>
+      <p id="entry-bar-label" class="text-xs text-gray-400">—</p>
+    </div>
+    <button onclick="showStep('step-type')" class="text-gray-400 hover:text-white text-sm">← Terug</button>
+  </div>
+  <div id="entry-form-body" class="p-4 space-y-1"></div>
+  <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg">
+    <button id="submit-btn"
+      class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 text-lg rounded-xl active:scale-95 transition-all">
+      ✓ Opslaan
+    </button>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/js/config.js"></script>
+<script src="/js/auth.js"></script>
+<script src="/js/form.js"></script>
+</body>
+</html>
