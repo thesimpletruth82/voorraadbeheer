@@ -40,28 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sku-form').addEventListener('submit', handleCreateSku);
 });
 
-function showSection(id) {
-  ['login-section','main-section'].forEach(s => {
-    document.getElementById(s).classList.toggle('hidden', s !== id);
-  });
-}
 
 function showTab(tab) {
   ['events','bars','skus'].forEach(t => {
     document.getElementById(`tab-${t}`).classList.toggle('hidden', t !== tab);
     document.getElementById(`tab-btn-${t}`).classList.toggle('tab-active', t === tab);
   });
-}
-
-function handleLogin(e) {
-  e.preventDefault();
-  const pw = document.getElementById('admin-pw').value;
-  if (Auth.loginAdmin(pw)) {
-    showSection('main-section');
-    loadData();
-  } else {
-    document.getElementById('login-error').classList.remove('hidden');
-  }
 }
 
 // ── Data loaders ───────────────────────────────────────────
@@ -73,7 +57,7 @@ async function loadEvents() {
   const sb = getSupabase();
   const { data } = await sb.from('events').select('*').order('created_at', { ascending: false });
   state.events = data || [];
-  renderEvents();
+  renderEventList();
   const active = state.events.find(e => e.is_active);
   if (active) await selectEvent(active.id);
 }
