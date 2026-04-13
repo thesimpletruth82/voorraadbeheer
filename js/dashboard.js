@@ -50,14 +50,74 @@ async function loadDashboard() {
     : '';
   document.getElementById('last-updated').textContent = new Date().toLocaleTimeString('nl-NL');
 
+  renderSummaryCards();
   renderDashboard();
   renderCharts();
+}
+
+function renderSummaryCards() {
+  const el = document.getElementById('stat-cards');
+  if (!el) return;
+
+  const totalSkus = dState.skus.length;
+  const totalBars = dState.bars.length;
+
+  // Find most critical SKU (lowest time to empty, > 0)
+  let critical = null, criticalHours = Infinity;
+  dState.bars.forEach(bar => {
+    const barSkuIds = dState.barSkus[bar.id] || [];
+    dState.skus.filter(s => barSkuIds.includes(s.id)).forEach(sku => {
+      const e = dState.entries.filter(x => x.bar_id === bar.id && x.sku_id === sku.id);
+      const sum = t => e.filter(x => x.entry_type === t).reduce((a, x) => a + Number(x.quantity), 0);
+      const current = sum('initial_count') + sum('delivery') + sum('transfer_in') - sum('transfer_out') - sum('tap_out');
+      const rate = calculateBurnRate(e.filter(x => x.entry_type === 'tap_out'));
+      if (rate > 0 && current > 0) {
+        const h = current / rate;
+        if (h < criticalHours) { criticalHours = h; critical = { sku, bar, hours: h }; }
+      }
+    });
+  });
+
+  const criticalColor = critical
+    ? (criticalHours < 1 ? '#ef4444' : criticalHours < 3 ? '#f59e0b' : '#10b981')
+    : '#64748b';
+
+  el.innerHTML = `
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(59,130,246,.15)">🏪</div>
+      <div class="stat-label">Actieve bars</div>
+      <div class="stat-value">${totalBars}</div>
+      <div class="stat-sub">${dState.event?.name || '—'}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(139,92,246,.15)">📦</div>
+      <div class="stat-label">Producten</div>
+      <div class="stat-value">${totalSkus}</div>
+      <div class="stat-sub">SKUs getrackt</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon" style="background:rgba(16,185,129,.15)">📋</div>
+      <div class="stat-label">Mutaties</div>
+      <div class="stat-value">${dState.entries.length}</div>
+      <div class="stat-sub">ingevoerd vandaag</div>
+    </div>
+    <div class="stat-card" style="border-color:${critical ? criticalColor + '44' : 'rgba(255,255,255,.07)'}">
+      <div class="stat-icon" style="background:rgba(239,68,68,.15)">⚠️</div>
+      <div class="stat-label">Meest kritiek</div>
+      <div class="stat-value" style="font-size:18px;color:${criticalColor}">
+        ${critical ? critical.sku.name : '—'}
+      </div>
+      <div class="stat-sub">
+        ${critical ? `${critical.bar.name} · ${formatTimeToEmpty(criticalHours)}`.replace(/<[^>]+>/g,'') : 'geen data'}
+      </div>
+    </div>
+  `;
 }
 
 function renderDashboard() {
   const container = document.getElementById('bars-container');
   if (!dState.bars.length) {
-    container.innerHTML = '<p class="text-gray-400">Geen bars geconfigureerd.</p>';
+    container.innerHTML = '<p style="color:#475569;padding:20px">Geen bars geconfigureerd.</p>';
     return;
   }
   container.innerHTML = dState.bars.map(bar => renderBar(bar)).join('');
@@ -68,26 +128,26 @@ function renderBar(bar) {
   const barSkus = dState.skus.filter(s => barSkuIds.includes(s.id));
 
   if (!barSkus.length) {
-    return `<div class="bar-card bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-      <div class="bg-gray-800 text-white px-5 py-3 font-semibold text-lg">${bar.name}</div>
-      <p class="p-4 text-gray-400 text-sm">Geen producten toegewezen.</p>
+    return `<div class="bar-card">
+      <div class="bar-card-header"><span class="bar-card-header-dot"></span>${bar.name}</div>
+      <p style="padding:16px;color:#475569;font-size:13px">Geen producten toegewezen.</p>
     </div>`;
   }
 
   const rows = barSkus.map(sku => renderSkuRow(bar.id, sku)).join('');
 
-  return `<div class="bar-card bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
-    <div class="bg-gray-800 text-white px-5 py-3 font-semibold text-lg">${bar.name}</div>
-    <div class="overflow-x-auto">
-      <table class="w-full text-sm">
+  return `<div class="bar-card">
+    <div class="bar-card-header"><span class="bar-card-header-dot"></span>${bar.name}</div>
+    <div style="overflow-x:auto">
+      <table class="stock-table">
         <thead>
-          <tr class="bg-gray-50 text-gray-500 text-xs uppercase tracking-wide">
-            <th class="text-left px-4 py-2">Product</th>
-            <th class="text-right px-3 py-2">Start</th>
-            <th class="text-right px-3 py-2">Verkocht</th>
-            <th class="text-right px-3 py-2">In container</th>
-            <th class="text-right px-3 py-2">Per uur</th>
-            <th class="text-right px-4 py-2">Leeg om</th>
+          <tr>
+            <th>Product</th>
+            <th>Start</th>
+            <th>Gebruikt</th>
+            <th>In container</th>
+            <th>Per uur</th>
+            <th>Leeg om</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -149,13 +209,13 @@ function renderSkuRow(barId, sku) {
 }
 
 function buildRow(name, colorClass, start, sold, current, burn, empty, isBeer) {
-  return `<tr class="${colorClass} border-b border-gray-100 last:border-0">
-    <td class="px-4 py-2.5 font-medium text-gray-800">${isBeer ? '🍺 ' : ''}${name}</td>
-    <td class="px-3 py-2.5 text-right text-gray-500">${start}</td>
-    <td class="px-3 py-2.5 text-right text-gray-600">${sold}</td>
-    <td class="px-3 py-2.5 text-right font-semibold">${current}</td>
-    <td class="px-3 py-2.5 text-right text-gray-600">${burn}</td>
-    <td class="px-4 py-2.5 text-right font-medium">${empty}</td>
+  return `<tr class="${colorClass}">
+    <td>${isBeer ? '🍺 ' : ''}<span style="color:#e2e8f0">${name}</span></td>
+    <td style="color:#64748b">${start}</td>
+    <td style="color:#94a3b8">${sold}</td>
+    <td style="font-weight:600;color:#f1f5f9">${current}</td>
+    <td style="color:#94a3b8">${burn}</td>
+    <td style="font-weight:600">${empty}</td>
   </tr>`;
 }
 
@@ -187,28 +247,28 @@ function calculateBeerBurnRate(levelReadingsSorted) {
 function getStatusColor(current, initial, timeToEmpty) {
   if (initial === 0 && current === 0) return '';
   if (timeToEmpty !== null) {
-    if (timeToEmpty < 1) return 'bg-red-50';
-    if (timeToEmpty < 3) return 'bg-yellow-50';
-    return 'bg-green-50';
+    if (timeToEmpty < 1) return 'row-red';
+    if (timeToEmpty < 3) return 'row-yellow';
+    return 'row-green';
   }
   if (initial > 0) {
     const pct = current / initial;
-    if (pct < 0.2) return 'bg-red-50';
-    if (pct < 0.5) return 'bg-yellow-50';
-    return 'bg-green-50';
+    if (pct < 0.2) return 'row-red';
+    if (pct < 0.5) return 'row-yellow';
+    return 'row-green';
   }
   return '';
 }
 
 function formatTimeToEmpty(hours) {
-  if (hours === null || hours === undefined) return '<span class="text-gray-300">—</span>';
-  if (hours < 0) return '<span class="text-red-600 font-bold">LEEG</span>';
+  if (hours === null || hours === undefined) return '<span style="color:#334155">—</span>';
+  if (hours < 0) return '<span style="color:#ef4444;font-weight:700">LEEG</span>';
   const h = Math.floor(hours);
   const m = Math.round((hours - h) * 60);
   const timeStr = h > 0 ? `${h}u ${m.toString().padStart(2,'0')}m` : `${m}m`;
-  if (hours < 1) return `<span class="text-red-600 font-bold">${timeStr}</span>`;
-  if (hours < 3) return `<span class="text-yellow-600 font-bold">${timeStr}</span>`;
-  return `<span class="text-green-700">${timeStr}</span>`;
+  if (hours < 1) return `<span style="color:#ef4444;font-weight:700">${timeStr}</span>`;
+  if (hours < 3) return `<span style="color:#f59e0b;font-weight:700">${timeStr}</span>`;
+  return `<span style="color:#10b981">${timeStr}</span>`;
 }
 
 // ── Charts ─────────────────────────────────────────────────
@@ -222,13 +282,13 @@ function renderCharts() {
     const regularSkus = barSkus.filter(s => !s.is_beer_tank);
     const beerSkus = barSkus.filter(s => s.is_beer_tank);
 
-    const regularCanvas = regularSkus.length
-      ? `<canvas id="chart-reg-${bar.id}"></canvas>` : '';
+    const regularCanvas = regularSkus.length ? `<canvas id="chart-reg-${bar.id}"></canvas>` : '';
     const beerCanvas = beerSkus.length
-      ? `<div class="mt-5 pt-5 border-t border-gray-100"><p class="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-3">🍺 Biertank (liters)</p><canvas id="chart-beer-${bar.id}"></canvas></div>` : '';
+      ? `<div class="beer-divider"><div class="beer-divider-label">🍺 Biertank (liters)</div><canvas id="chart-beer-${bar.id}"></canvas></div>`
+      : '';
 
-    return `<div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-5">
-      <h3 class="font-semibold text-gray-800 mb-4">${bar.name}</h3>
+    return `<div class="chart-card">
+      <div class="chart-card-title">${bar.name}</div>
       ${regularCanvas}${beerCanvas}
     </div>`;
   }).join('');
@@ -294,8 +354,8 @@ function buildChart(canvasId, skus, barId, calcFn) {
         {
           label: 'Gebruikt',
           data: used,
-          backgroundColor: 'rgba(220, 38, 38, 0.8)',
-          borderColor: 'rgba(185, 28, 28, 1)',
+          backgroundColor: 'rgba(239,68,68,.75)',
+          borderColor: 'rgba(239,68,68,1)',
           borderWidth: 1,
           borderRadius: 0,
           stack: 'stock',
@@ -303,8 +363,8 @@ function buildChart(canvasId, skus, barId, calcFn) {
         {
           label: 'Resterend',
           data: remaining,
-          backgroundColor: 'rgba(22, 163, 74, 0.8)',
-          borderColor: 'rgba(15, 118, 54, 1)',
+          backgroundColor: 'rgba(16,185,129,.75)',
+          borderColor: 'rgba(16,185,129,1)',
           borderWidth: 1,
           borderRadius: 4,
           stack: 'stock',
@@ -314,12 +374,20 @@ function buildChart(canvasId, skus, barId, calcFn) {
     options: {
       responsive: true,
       plugins: {
-        legend: { position: 'top' },
+        legend: {
+          position: 'top',
+          labels: { color: '#94a3b8', font: { size: 12 }, boxWidth: 12, padding: 16 },
+        },
         tooltip: {
+          backgroundColor: 'rgba(15,23,42,.95)',
+          borderColor: 'rgba(255,255,255,.1)',
+          borderWidth: 1,
+          titleColor: '#f1f5f9',
+          bodyColor: '#94a3b8',
           callbacks: {
             label: (ctx) => {
               const sku = skus[ctx.dataIndex];
-              return `${ctx.dataset.label}: ${ctx.raw.toLocaleString('nl-NL')} ${sku.unit}`;
+              return `  ${ctx.dataset.label}: ${ctx.raw.toLocaleString('nl-NL')} ${sku.unit}`;
             },
             footer: (items) => {
               const i = items[0].dataIndex;
@@ -329,11 +397,18 @@ function buildChart(canvasId, skus, barId, calcFn) {
         },
       },
       scales: {
-        x: { stacked: true },
+        x: {
+          stacked: true,
+          ticks: { color: '#64748b', font: { size: 11 } },
+          grid: { color: 'rgba(255,255,255,.04)' },
+          border: { color: 'rgba(255,255,255,.06)' },
+        },
         y: {
           stacked: true,
           beginAtZero: true,
-          ticks: { precision: 0 },
+          ticks: { precision: 0, color: '#64748b', font: { size: 11 } },
+          grid: { color: 'rgba(255,255,255,.06)' },
+          border: { color: 'rgba(255,255,255,.06)' },
         },
       },
     },
