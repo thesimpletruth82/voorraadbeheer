@@ -117,30 +117,27 @@ function renderSkuRow(barId, sku) {
   if (sku.is_beer_tank) {
     const levelReadings = e.filter(x => x.entry_type === 'beer_tank_level' && x.beer_tank_liters != null)
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-    const latestLevel = levelReadings[0];
-    const liters = latestLevel ? Number(latestLevel.beer_tank_liters) : null;
-    const pct = liters != null ? Math.round((liters / sku.tank_size_liters) * 100) : null;
     const beerBurnRate = calculateBeerBurnRate(levelReadings);
 
-    currentDisplay = liters != null
-      ? `<div>${liters.toLocaleString('nl-NL')} L</div>
-         <div class="flex items-center gap-1 mt-1">
-           <div class="w-16 bg-gray-200 rounded-full h-2">
-             <div class="h-2 rounded-full ${pct > 50 ? 'bg-green-500' : pct > 20 ? 'bg-yellow-400' : 'bg-red-500'}"
-                  style="width:${pct}%"></div>
-           </div>
-           <span class="text-xs text-gray-500">${pct}%</span>
-         </div>`
-      : '<span class="text-gray-300">—</span>';
+    // Primary value: calculated from entries (initial − tap_out), same as all other SKUs
+    const pct = initial > 0 ? Math.min(100, Math.round((current / initial) * 100)) : null;
+
+    currentDisplay = `<div>${current.toLocaleString('nl-NL')} L</div>
+       ${pct != null ? `<div class="flex items-center gap-1 mt-1">
+         <div class="w-16 bg-gray-200 rounded-full h-2">
+           <div class="h-2 rounded-full ${pct > 50 ? 'bg-green-500' : pct > 20 ? 'bg-yellow-400' : 'bg-red-500'}"
+                style="width:${pct}%"></div>
+         </div>
+         <span class="text-xs text-gray-500">${pct}%</span>
+       </div>` : ''}`;
 
     burnDisplay = beerBurnRate != null
       ? `${Math.round(beerBurnRate)} L/u`
       : (burnRate > 0 ? `${Math.round(burnRate)} L/u` : '<span class="text-gray-300">—</span>');
 
-    const beerTimeToEmpty = liters != null && beerBurnRate > 0 ? liters / beerBurnRate : timeToEmpty;
     return buildRow(sku.name, statusColor,
       `${initial} ${sku.unit}`, tapOut || '—', currentDisplay, burnDisplay,
-      formatTimeToEmpty(beerTimeToEmpty), sku.is_beer_tank);
+      formatTimeToEmpty(timeToEmpty), sku.is_beer_tank);
   }
 
   burnDisplay = burnRate > 0 ? `${burnRate.toFixed(1)}/u` : '<span class="text-gray-300">—</span>';
