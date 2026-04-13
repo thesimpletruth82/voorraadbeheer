@@ -32,7 +32,6 @@ const DEFAULT_SKUS = [
 
 // ── Init ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
-  showSection('main-section');
   loadData();
 
   document.getElementById('event-form').addEventListener('submit', handleCreateEvent);
