@@ -477,6 +477,25 @@ function formatTimeToEmpty(hours) {
   return `<span style="color:#10b981">${timeStr}</span>`;
 }
 
+// ── Glow plugin (defined once, reused by every chart) ──────
+const _glowPlugin = {
+  id: 'barGlow',
+  beforeDatasetDraw(chart, args) {
+    // dataset 0 = red (Gebruikt), dataset 1 = green (Resterend)
+    const colors = ['rgba(239,68,68,.7)', 'rgba(16,185,129,.7)'];
+    chart.ctx.save();
+    chart.ctx.shadowColor   = colors[args.index % colors.length];
+    chart.ctx.shadowBlur    = 10;
+    chart.ctx.shadowOffsetX = 0;
+    chart.ctx.shadowOffsetY = 2;
+  },
+  afterDatasetDraw(chart) {
+    chart.ctx.shadowColor = 'transparent';
+    chart.ctx.shadowBlur  = 0;
+    chart.ctx.restore();
+  },
+};
+
 // ── Chart builder ──────────────────────────────────────────
 function buildChart(canvasId, skus, availableArr, usedArr) {
   const canvas = document.getElementById(canvasId);
@@ -485,28 +504,34 @@ function buildChart(canvasId, skus, availableArr, usedArr) {
   const labels    = skus.map(s => s.name);
   const remaining = availableArr.map((a, i) => Math.max(0, a - usedArr[i]));
 
+  // Shared dataset style — 30% slimmer than Chart.js defaults (0.9 / 0.8)
+  const barOpts = { barPercentage: 0.63, categoryPercentage: 0.56 };
+
   return new Chart(canvas.getContext('2d'), {
     type: 'bar',
+    plugins: [_glowPlugin],
     data: {
       labels,
       datasets: [
         {
           label: 'Gebruikt',
           data: usedArr,
-          backgroundColor: 'rgba(239,68,68,.75)',
+          backgroundColor: 'rgba(239,68,68,.78)',
           borderColor: 'rgba(239,68,68,1)',
           borderWidth: 1,
           borderRadius: 0,
           stack: 'stock',
+          ...barOpts,
         },
         {
           label: 'Resterend',
           data: remaining,
-          backgroundColor: 'rgba(16,185,129,.75)',
+          backgroundColor: 'rgba(16,185,129,.78)',
           borderColor: 'rgba(16,185,129,1)',
           borderWidth: 1,
           borderRadius: 4,
           stack: 'stock',
+          ...barOpts,
         },
       ],
     },
@@ -516,6 +541,22 @@ function buildChart(canvasId, skus, availableArr, usedArr) {
         legend: {
           position: 'top',
           labels: { color: '#94a3b8', font: { size: 12 }, boxWidth: 12, padding: 16 },
+        },
+        // ── Data labels ──
+        datalabels: {
+          color: 'rgba(255,255,255,.92)',
+          font: { size: 10, weight: '700' },
+          anchor: 'center',
+          align: 'center',
+          // Hide label when the segment is too small to fit text (< 9 % of total bar)
+          display(ctx) {
+            const total = availableArr[ctx.dataIndex] || 0;
+            if (total === 0) return false;
+            return (ctx.dataset.data[ctx.dataIndex] / total) > 0.09;
+          },
+          formatter(value) {
+            return value > 0 ? value.toLocaleString('nl-NL') : null;
+          },
         },
         tooltip: {
           backgroundColor: 'rgba(15,23,42,.95)',
