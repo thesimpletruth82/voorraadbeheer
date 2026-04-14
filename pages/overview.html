@@ -10,25 +10,25 @@
   <style>
     /* ── Stacked bar chart ─────────────────────────────── */
     .bar-chart-wrap {
-      padding: 8px 0;
-      margin-top: 20px;
+      padding: 0;
+      margin-top: 24px;
       border-top: 1px solid var(--border);
+      padding-top: 16px;
     }
     .bar-chart {
       display: flex;
       align-items: flex-end;
-      gap: 4px;
+      gap: 14px;
       height: 170px;
       min-width: min-content;
-      padding: 0 2px;
+      padding: 0 4px;
     }
     .bar-col {
       display: flex;
       flex-direction: column;
       align-items: center;
-      flex: 1;
-      min-width: 24px;
-      max-width: 38px;
+      flex: 0 0 auto;
+      width: 18px;
     }
     .bar-stack {
       width: 100%;
@@ -45,12 +45,12 @@
     }
     /* Sold at bottom, stock on top */
     .bar-seg-stock {
-      background: #22c55e;
-      box-shadow: 0 0 10px rgba(34,197,94,.3), inset 0 1px 0 rgba(255,255,255,.12);
+      background: #34d399;
+      box-shadow: 0 0 12px rgba(52,211,153,.35), inset 0 1px 0 rgba(255,255,255,.15);
     }
     .bar-seg-sold {
       background: #f43f5e;
-      box-shadow: 0 0 10px rgba(244,63,94,.35), inset 0 -1px 0 rgba(255,255,255,.1);
+      box-shadow: 0 0 12px rgba(244,63,94,.35), inset 0 -1px 0 rgba(255,255,255,.1);
     }
     .bar-label {
       font-size: 8px;
@@ -59,7 +59,7 @@
       margin-top: 5px;
       line-height: 1.15;
       word-break: break-word;
-      max-width: 42px;
+      max-width: 50px;
       height: 24px;
       overflow: hidden;
     }
@@ -85,7 +85,7 @@
       margin-right: 4px;
       vertical-align: middle;
     }
-    .legend-stock { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.4); }
+    .legend-stock { background: #34d399; box-shadow: 0 0 6px rgba(52,211,153,.4); }
     .legend-sold  { background: #f43f5e; box-shadow: 0 0 6px rgba(244,63,94,.4); }
   </style>
 </head>
