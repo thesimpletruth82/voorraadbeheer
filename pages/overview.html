@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockFest — Live Overview</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main">
+      <div class="page-header flex justify-between items-center">
+        <div>
+          <h1><span class="live-dot"></span> Live Overview</h1>
+          <p>Real-time stock levels across all locations.</p>
+        </div>
+      </div>
+      <div class="page-body">
+        <div id="noEvent" class="empty-state hidden">
+          <i data-lucide="alert-circle"></i>
+          <h3>No active event</h3>
+          <p>Select or activate an event on the <a href="/">Events page</a> first.</p>
+        </div>
+
+        <div id="content" class="hidden">
+          <!-- Stats -->
+          <div class="stats-row" id="stats"></div>
+
+          <!-- Stock tables per location -->
+          <div id="stockTables"></div>
+
+          <!-- Movement feed -->
+          <div class="card mt-4">
+            <div class="card-title"><i data-lucide="clock"></i> Recent Movements</div>
+            <div id="feed"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="bottombar" id="bottombar"></nav>
+  </div>
+
+  <script src="/js/supabase.js"></script>
+  <script src="/js/db.js"></script>
+  <script>
+    renderNav('overview');
+
+    const eventId = Ctx.id();
+    if (!eventId) {
+      document.getElementById('noEvent').classList.remove('hidden');
+    } else {
+      document.getElementById('content').classList.remove('hidden');
+      init();
+    }
+
+    const LOW_THRESHOLD = 10;
+
+    async function init() {
+      await refresh();
+      setupRealtime();
+      // Auto-refresh every 30s as fallback
+      setInterval(refresh, 30000);
+    }
+
+    async function refresh() {
+      const [locations, skus, stock, movements] = await Promise.all([
+        DB.getLocations(eventId),
+        DB.getSkus(),
+        DB.computeCurrentStock(eventId),
+        DB.getMovements(eventId, 20),
+      ]);
+
+      renderStats(locations, skus, stock, movements);
+      renderStockTables(locations, skus, stock);
+      renderFeed(movements);
+    }
+
+    function renderStats(locations, skus, stock, movements) {
+      let lowCount = 0;
+      for (const loc of locations) {
+        for (const sku of skus) {
+          const qty = stock[loc.id]?.[sku.id] || 0;
+          if (qty > 0 && qty < LOW_THRESHOLD) lowCount++;
+        }
+      }
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-icon blue"><i data-lucide="map-pin"></i></div>
+          <div class="stat-label">Locations</div>
+          <div class="stat-value">${locations.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon purple"><i data-lucide="package"></i></div>
+          <div class="stat-label">Products</div>
+          <div class="stat-value">${skus.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i data-lucide="arrow-right-left"></i></div>
+          <div class="stat-label">Movements</div>
+          <div class="stat-value">${movements.length}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon ${lowCount > 0 ? 'red' : 'amber'}"><i data-lucide="alert-triangle"></i></div>
+          <div class="stat-label">Low Stock</div>
+          <div class="stat-value">${lowCount}</div>
+          <div class="stat-sub">Below ${LOW_THRESHOLD} units</div>
+        </div>`;
+      lucide.createIcons();
+    }
+
+    function renderStockTables(locations, skus, stock) {
+      const $tables = document.getElementById('stockTables');
+
+      if (!locations.length) {
+        $tables.innerHTML = '<div class="empty-state"><i data-lucide="map-pin"></i><h3>No locations</h3><p>Add locations in <a href="/pages/setup-locations.html">Setup</a>.</p></div>';
+        lucide.createIcons();
+        return;
+      }
+
+      $tables.innerHTML = locations.map(loc => {
+        const locStock = stock[loc.id] || {};
+        // Only show SKUs that have stock or an opening count
+        const relevantSkus = skus.filter(s => (locStock[s.id] || 0) !== 0);
+
+        if (!relevantSkus.length) {
+          return `
+            <div class="card" style="margin-bottom:16px;">
+              <div class="card-title"><i data-lucide="map-pin"></i> ${esc(loc.name)}</div>
+              <div class="text-muted text-sm" style="padding:4px 0;">No stock data yet.</div>
+            </div>`;
+        }
+
+        const rows = relevantSkus.map(s => {
+          const qty = locStock[s.id] || 0;
+          let cls = 'var-zero', status = '';
+          if (qty <= 0) { cls = 'var-neg'; status = '<span class="badge badge-red">Out</span>'; }
+          else if (qty < LOW_THRESHOLD) { cls = 'var-neg'; status = '<span class="badge badge-amber">Low</span>'; }
+          else { cls = 'var-pos'; status = '<span class="badge badge-green">OK</span>'; }
+
+          return `<tr>
+            <td><strong>${esc(s.name)}</strong></td>
+            <td class="right"><span class="${cls}">${qty}</span> <span class="text-xs text-muted">${esc(s.unit)}</span></td>
+            <td class="right">${status}</td>
+          </tr>`;
+        }).join('');
+
+        return `
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title"><i data-lucide="map-pin"></i> ${esc(loc.name)}</div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Product</th><th class="right">Qty</th><th class="right">Status</th></tr></thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </div>`;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function renderFeed(movements) {
+      const $feed = document.getElementById('feed');
+      if (!movements.length) {
+        $feed.innerHTML = '<div class="text-muted text-sm" style="padding:12px 0;">No movements yet.</div>';
+        return;
+      }
+
+      $feed.innerHTML = movements.map(m => {
+        const time = new Date(m.moved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const skuName = m.sku?.name || '?';
+        let desc = m.type === 'transfer'
+          ? `${m.from_loc?.name || '?'} → ${m.to_loc?.name || '?'}`
+          : `Delivery → ${m.to_loc?.name || '?'}`;
+
+        return `
+          <div class="feed-item">
+            <div class="feed-dot ${m.type}"></div>
+            <div class="feed-main">
+              <div class="feed-title">${esc(skuName)}</div>
+              <div class="feed-meta">${esc(desc)} · ${time}</div>
+            </div>
+            <div class="feed-qty">${m.quantity}</div>
+          </div>`;
+      }).join('');
+    }
+
+    function setupRealtime() {
+      sb().channel('overview-movements')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'movements',
+          filter: `event_id=eq.${eventId}`,
+        }, () => refresh())
+        .subscribe();
+
+      sb().channel('overview-counts')
+        .on('postgres_changes', {
+          event: '*',
+          schema: 'public',
+          table: 'stock_counts',
+          filter: `event_id=eq.${eventId}`,
+        }, () => refresh())
+        .subscribe();
+    }
+  </script>
+</body>
+</html>

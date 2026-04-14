@@ -1,143 +1,142 @@
 <!DOCTYPE html>
-<html lang="nl">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StockFest — Inloggen</title>
+  <title>StockFest — Events</title>
   <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-<div id="toast" style="display:none"></div>
-<div class="login-wrap">
-  <div class="login-card">
-    <div class="login-logo">
-      <div class="login-logo-icon">
-        <i data-lucide="beer" style="color:white"></i>
+  <div class="app">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main">
+      <div class="page-header">
+        <h1>Events</h1>
+        <p>Create and manage festival events. Set one as active to start tracking.</p>
       </div>
-      <div class="login-title">StockFest</div>
-      <div class="login-sub">Festival voorraadbeheer</div>
-    </div>
+      <div class="page-body">
+        <!-- Create event -->
+        <div class="card mb-6">
+          <div class="card-title"><i data-lucide="plus-circle"></i> New Event</div>
+          <form id="createForm" class="form-row" style="align-items:flex-end; gap:10px;">
+            <div class="form-group" style="flex:2; margin-bottom:0;">
+              <label>Event Name</label>
+              <input type="text" id="eventName" placeholder="e.g. Summer Festival 2025" required>
+            </div>
+            <div class="form-group" style="flex:1; margin-bottom:0;">
+              <label>Date</label>
+              <input type="date" id="eventDate" required>
+            </div>
+            <button type="submit" class="btn btn-primary">
+              <i data-lucide="plus"></i> Create
+            </button>
+          </form>
+        </div>
 
-    <div id="login-error" class="login-error" style="display:none"></div>
-
-    <!-- Login form -->
-    <div id="form-login">
-      <div class="form-group">
-        <label>E-mailadres</label>
-        <input id="login-email" type="email" placeholder="naam@voorbeeld.nl" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Wachtwoord</label>
-        <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password">
-      </div>
-      <button id="btn-login" class="btn btn-primary btn-full" style="margin-top:4px">
-        Inloggen
-      </button>
-      <div class="login-toggle">
-        Nog geen account? <a onclick="toggle('register')">Registreren</a>
-      </div>
-    </div>
-
-    <!-- Register form -->
-    <div id="form-register" style="display:none">
-      <div class="form-group">
-        <label>Naam</label>
-        <input id="reg-name" type="text" placeholder="Jouw naam">
-      </div>
-      <div class="form-group">
-        <label>E-mailadres</label>
-        <input id="reg-email" type="email" placeholder="naam@voorbeeld.nl" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Wachtwoord</label>
-        <input id="reg-password" type="password" placeholder="Min. 6 tekens" autocomplete="new-password">
-      </div>
-      <button id="btn-register" class="btn btn-primary btn-full" style="margin-top:4px">
-        Account aanmaken
-      </button>
-      <div class="login-toggle">
-        Al een account? <a onclick="toggle('login')">Inloggen</a>
-      </div>
-      <div style="margin-top:14px;padding:10px 12px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px;font-size:12px;color:#93c5fd">
-        Na registratie heeft je account standaard de rol <strong>runner</strong>. Vraag een admin je rol te wijzigen via Gebruikersbeheer.
+        <!-- Event list -->
+        <div id="eventList"></div>
       </div>
     </div>
+    <nav class="bottombar" id="bottombar"></nav>
   </div>
-</div>
 
-<!-- Scripts at bottom — NOT render-blocking -->
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
-<script src="/js/supabase.js"></script>
-<script>
-  if (window.lucide) lucide.createIcons();
+  <script src="/js/supabase.js"></script>
+  <script src="/js/db.js"></script>
+  <script>
+    renderNav('events');
 
-  // Check for existing session — redirect if already logged in
-  (async () => {
-    try {
-      const session = await Auth.getSession();
-      if (session) location.href = '/admin';
-    } catch (e) {
-      // stay on login
+    const $list = document.getElementById('eventList');
+    const $form = document.getElementById('createForm');
+
+    async function loadEvents() {
+      const events = await DB.getEvents();
+      if (!events.length) {
+        $list.innerHTML = `<div class="empty-state"><i data-lucide="calendar"></i><h3>No events yet</h3><p>Create your first event above to get started.</p></div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      $list.innerHTML = events.map(e => {
+        const badgeClass = e.status === 'active' ? 'badge-green' : e.status === 'closed' ? 'badge-gray' : 'badge-purple';
+        const statusLabel = e.status.charAt(0).toUpperCase() + e.status.slice(1);
+
+        let actions = '';
+        if (e.status === 'setup') {
+          actions += `<button class="btn btn-sm btn-success" onclick="activate('${e.id}','${esc(e.name)}')"><i data-lucide="play"></i> Activate</button>`;
+        } else if (e.status === 'active') {
+          actions += `<button class="btn btn-sm btn-ghost" onclick="closeEvent('${e.id}')"><i data-lucide="lock"></i> Close</button>`;
+        }
+        actions += `<button class="btn btn-sm btn-ghost" onclick="selectEvent('${e.id}','${esc(e.name)}','${e.status}')"><i data-lucide="arrow-right"></i></button>`;
+        if (e.status !== 'active') {
+          actions += `<button class="btn btn-sm btn-danger" onclick="del('${e.id}')"><i data-lucide="trash-2"></i></button>`;
+        }
+
+        return `
+          <div class="event-card">
+            <div class="event-info">
+              <div class="event-name">${esc(e.name)}</div>
+              <div class="event-date">${e.date || 'No date'} &nbsp;<span class="badge ${badgeClass}">${statusLabel}</span></div>
+            </div>
+            <div class="event-actions">${actions}</div>
+          </div>`;
+      }).join('');
+      lucide.createIcons();
     }
-  })();
 
-  function setError(msg) {
-    const el = document.getElementById('login-error');
-    el.textContent = msg;
-    el.style.display = msg ? '' : 'none';
-  }
+    $form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const name = document.getElementById('eventName').value.trim();
+      const date = document.getElementById('eventDate').value;
+      if (!name) return;
+      const btn = $form.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      const { error } = await DB.createEvent(name, date);
+      btn.disabled = false;
+      if (error) { toast(error.message, 'err'); return; }
+      toast('Event created');
+      $form.reset();
+      loadEvents();
+    });
 
-  function toggle(mode) {
-    setError('');
-    document.getElementById('form-login').style.display    = mode === 'login'    ? '' : 'none';
-    document.getElementById('form-register').style.display = mode === 'register' ? '' : 'none';
-  }
+    async function activate(id, name) {
+      const events = await DB.getEvents();
+      for (const e of events) {
+        if (e.status === 'active') await DB.updateEventStatus(e.id, 'closed');
+      }
+      await DB.updateEventStatus(id, 'active');
+      Ctx.set(id, name, 'active');
+      toast('Event activated');
+      renderNav('events');
+      loadEvents();
+    }
 
-  document.getElementById('btn-login').addEventListener('click', async () => {
-    const email    = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    if (!email || !password) { setError('Vul e-mail en wachtwoord in.'); return; }
+    async function closeEvent(id) {
+      await DB.updateEventStatus(id, 'closed');
+      if (Ctx.id() === id) Ctx.clear();
+      toast('Event closed');
+      renderNav('events');
+      loadEvents();
+    }
 
-    const btn = document.getElementById('btn-login');
-    btn.disabled = true; btn.textContent = 'Bezig...';
+    async function del(id) {
+      if (!confirm('Delete this event and all its data?')) return;
+      const { error } = await DB.deleteEvent(id);
+      if (error) { toast(error.message, 'err'); return; }
+      if (Ctx.id() === id) Ctx.clear();
+      toast('Event deleted');
+      renderNav('events');
+      loadEvents();
+    }
 
-    const { error } = await Auth.signIn(email, password);
-    btn.disabled = false;
-    btn.textContent = 'Inloggen';
+    function selectEvent(id, name, status) {
+      Ctx.set(id, name, status);
+      renderNav('events');
+      window.location.href = '/pages/overview.html';
+    }
 
-    if (error) { setError(error.message); return; }
-    location.href = '/admin';
-  });
-
-  document.getElementById('btn-register').addEventListener('click', async () => {
-    const name     = document.getElementById('reg-name').value.trim();
-    const email    = document.getElementById('reg-email').value.trim();
-    const password = document.getElementById('reg-password').value;
-    if (!name || !email || !password) { setError('Vul alle velden in.'); return; }
-    if (password.length < 6) { setError('Wachtwoord moet min. 6 tekens zijn.'); return; }
-
-    const btn = document.getElementById('btn-register');
-    btn.disabled = true; btn.textContent = 'Bezig...';
-
-    const { error } = await Auth.signUp(email, password, name);
-    btn.disabled = false;
-    btn.textContent = 'Account aanmaken';
-
-    if (error) { setError(error.message); return; }
-    setError('');
-    toggle('login');
-    document.getElementById('login-error').style.display = '';
-    document.getElementById('login-error').style.color = '#34d399';
-    document.getElementById('login-error').textContent = 'Account aangemaakt! Controleer je e-mail om te bevestigen.';
-  });
-
-  document.addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return;
-    const loginVisible = document.getElementById('form-login').style.display !== 'none';
-    if (loginVisible) document.getElementById('btn-login').click();
-    else document.getElementById('btn-register').click();
-  });
-</script>
+    loadEvents();
+  </script>
 </body>
 </html>
