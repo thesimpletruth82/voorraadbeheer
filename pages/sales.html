@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockFest — Sales</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main">
+      <div class="page-header">
+        <h1>Sales</h1>
+        <p>Tap products to log what's been sold. Select your location first.</p>
+      </div>
+      <div class="page-body">
+        <div id="noEvent" class="empty-state hidden">
+          <i data-lucide="alert-circle"></i>
+          <h3>No active event</h3>
+          <p>Select or activate an event on the <a href="/">Events page</a> first.</p>
+        </div>
+
+        <div id="content" class="hidden">
+          <!-- Location picker -->
+          <div class="form-group mb-6">
+            <label>Your Location</label>
+            <select id="saleLoc" style="font-size:15px; padding:12px;"></select>
+          </div>
+
+          <!-- Summary bar + submit -->
+          <div class="sale-summary hidden" id="summary">
+            <div>
+              <div class="sale-summary-count" id="totalCount">0 items</div>
+              <div class="sale-summary-label">Ready to submit</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-ghost btn-sm" onclick="clearAll()"><i data-lucide="x"></i> Clear</button>
+              <button class="btn btn-success" onclick="submitSales()" id="submitBtn"><i data-lucide="check"></i> Submit Sales</button>
+            </div>
+          </div>
+
+          <!-- Product grid -->
+          <div class="sales-grid" id="grid"></div>
+
+          <!-- Recent sales -->
+          <div class="card mt-4">
+            <div class="card-title"><i data-lucide="clock"></i> Recent Sales</div>
+            <div id="feed"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <nav class="bottombar" id="bottombar"></nav>
+  </div>
+
+  <script src="/js/supabase.js"></script>
+  <script src="/js/db.js"></script>
+  <script>
+    renderNav('sales');
+
+    const eventId = Ctx.id();
+    if (!eventId) {
+      document.getElementById('noEvent').classList.remove('hidden');
+    } else {
+      document.getElementById('content').classList.remove('hidden');
+      init();
+    }
+
+    let locations = [], skus = [], counts = {};
+    const LAST_LOC_KEY = 'sf_sales_loc';
+
+    async function init() {
+      [locations, skus] = await Promise.all([
+        DB.getLocations(eventId),
+        DB.getSkus(),
+      ]);
+
+      if (!locations.length || !skus.length) {
+        document.getElementById('content').innerHTML = `
+          <div class="empty-state">
+            <i data-lucide="alert-circle"></i>
+            <h3>Setup required</h3>
+            <p>${!locations.length ? 'Add <a href="/pages/setup-locations.html">locations</a> first.' : 'Add <a href="/pages/setup-skus.html">products</a> first.'}</p>
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      // Location picker — remember last used
+      const $loc = document.getElementById('saleLoc');
+      $loc.innerHTML = locations.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
+      const lastLoc = localStorage.getItem(LAST_LOC_KEY);
+      if (lastLoc && locations.find(l => l.id === lastLoc)) $loc.value = lastLoc;
+      $loc.addEventListener('change', () => {
+        localStorage.setItem(LAST_LOC_KEY, $loc.value);
+        loadFeed();
+      });
+
+      renderGrid();
+      loadFeed();
+    }
+
+    function renderGrid() {
+      document.getElementById('grid').innerHTML = skus.map(s => {
+        const count = counts[s.id] || 0;
+        return `
+          <button class="sale-btn${count ? ' has-count' : ''}" onclick="tap('${s.id}')" id="btn-${s.id}">
+            ${count ? `<div class="sale-badge" id="badge-${s.id}">${count}</div>` : ''}
+            <div class="sale-btn-name">${esc(s.name)}</div>
+            <div class="sale-btn-unit">${esc(s.unit)}</div>
+          </button>`;
+      }).join('');
+      updateSummary();
+    }
+
+    function tap(skuId) {
+      counts[skuId] = (counts[skuId] || 0) + 1;
+
+      // Update just the tapped button (fast, no full re-render)
+      const btn = document.getElementById('btn-' + skuId);
+      btn.classList.add('has-count');
+      let badge = document.getElementById('badge-' + skuId);
+      if (badge) {
+        badge.textContent = counts[skuId];
+      } else {
+        badge = document.createElement('div');
+        badge.className = 'sale-badge';
+        badge.id = 'badge-' + skuId;
+        badge.textContent = counts[skuId];
+        btn.prepend(badge);
+      }
+      updateSummary();
+    }
+
+    function updateSummary() {
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      const $summary = document.getElementById('summary');
+      const $count = document.getElementById('totalCount');
+      if (total > 0) {
+        $summary.classList.remove('hidden');
+        $count.textContent = total + ' item' + (total !== 1 ? 's' : '');
+      } else {
+        $summary.classList.add('hidden');
+      }
+    }
+
+    function clearAll() {
+      counts = {};
+      renderGrid();
+    }
+
+    async function submitSales() {
+      const locId = document.getElementById('saleLoc').value;
+      const entries = Object.entries(counts).filter(([, qty]) => qty > 0);
+      if (!entries.length) { toast('Nothing to submit', 'err'); return; }
+
+      const btn = document.getElementById('submitBtn');
+      btn.disabled = true;
+
+      const promises = entries.map(([skuId, qty]) =>
+        DB.createMovement({
+          eventId,
+          fromLocationId: locId,
+          toLocationId: null,
+          skuId,
+          quantity: qty,
+          type: 'sale',
+          notes: null,
+        })
+      );
+
+      const results = await Promise.all(promises);
+      btn.disabled = false;
+
+      const err = results.find(r => r.error);
+      if (err) { toast(err.error.message, 'err'); return; }
+
+      const total = entries.reduce((a, [, q]) => a + q, 0);
+      toast(`${total} sale${total !== 1 ? 's' : ''} logged`);
+      counts = {};
+      renderGrid();
+      loadFeed();
+    }
+
+    async function loadFeed() {
+      const locId = document.getElementById('saleLoc')?.value;
+      // Get recent sales for this location
+      const allMoves = await DB.getMovements(eventId, 50);
+      const sales = allMoves.filter(m => m.type === 'sale' && m.from_location_id === locId).slice(0, 15);
+
+      const $feed = document.getElementById('feed');
+      if (!sales.length) {
+        $feed.innerHTML = '<div class="text-muted text-sm" style="padding:12px 0;">No sales yet at this location.</div>';
+        return;
+      }
+
+      $feed.innerHTML = sales.map(m => {
+        const time = new Date(m.moved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const skuName = m.sku?.name || '?';
+        return `
+          <div class="feed-item">
+            <div class="feed-dot sale"></div>
+            <div class="feed-main">
+              <div class="feed-title">${esc(skuName)}</div>
+              <div class="feed-meta">Sold · ${time}</div>
+            </div>
+            <div class="feed-qty">−${m.quantity}</div>
+          </div>`;
+      }).join('');
+    }
+  </script>
+</body>
+</html>

@@ -60,6 +60,7 @@ function renderNav(activePage) {
     { id: 'opening',   label: 'Opening Count', icon: 'clipboard-list', href: '/pages/opening.html', section: 'Counts' },
     { id: 'closing',   label: 'Closing Count', icon: 'clipboard-check', href: '/pages/closing.html' },
     { id: 'overview',  label: 'Live Overview', icon: 'activity',     href: '/pages/overview.html', section: 'Operations' },
+    { id: 'sales',     label: 'Sales',         icon: 'shopping-cart', href: '/pages/sales.html' },
     { id: 'movement',  label: 'Log Movement',  icon: 'truck',        href: '/pages/movement.html' },
     { id: 'variance',  label: 'Variance Report', icon: 'bar-chart-2', href: '/pages/variance.html', section: 'Reports' },
   ];
@@ -97,10 +98,10 @@ function renderNav(activePage) {
 
   // Bottom bar (mobile) — show key pages
   const bottomPages = [
-    { id: 'events',   label: 'Events',   icon: 'calendar',        href: '/' },
     { id: 'overview', label: 'Overview',  icon: 'activity',        href: '/pages/overview.html' },
+    { id: 'sales',    label: 'Sales',     icon: 'shopping-cart',   href: '/pages/sales.html' },
     { id: 'movement', label: 'Movement',  icon: 'truck',           href: '/pages/movement.html' },
-    { id: 'variance', label: 'Report',    icon: 'bar-chart-2',     href: '/pages/variance.html' },
+    { id: 'events',   label: 'Events',    icon: 'calendar',        href: '/' },
   ];
 
   const bottombar = document.getElementById('bottombar');

@@ -149,6 +149,9 @@ const DB = {
         if (m.from_location_id) add(m.from_location_id, m.sku_id, -qty);
         if (m.to_location_id)   add(m.to_location_id,   m.sku_id,  qty);
       }
+      if (m.type === 'sale' && m.from_location_id) {
+        add(m.from_location_id, m.sku_id, -qty);
+      }
     }
     return stock;
   },
@@ -171,23 +174,24 @@ const DB = {
     for (const loc of locations) {
       for (const sku of skus) {
         const open = openingMap[loc.id]?.[sku.id] || 0;
-        let delivIn = 0, transOut = 0, transIn = 0;
+        let delivIn = 0, transOut = 0, transIn = 0, salesOut = 0;
         for (const m of rawMovements) {
           if (m.sku_id !== sku.id) continue;
           if (m.type === 'delivery' && m.to_location_id === loc.id) delivIn += Number(m.quantity);
           if (m.type === 'transfer' && m.from_location_id === loc.id) transOut += Number(m.quantity);
           if (m.type === 'transfer' && m.to_location_id === loc.id) transIn += Number(m.quantity);
+          if (m.type === 'sale' && m.from_location_id === loc.id) salesOut += Number(m.quantity);
         }
-        const expected = open + delivIn + transIn - transOut;
+        const expected = open + delivIn + transIn - transOut - salesOut;
         const actual = closingMap[loc.id]?.[sku.id] ?? null;
         const variance = actual !== null ? actual - expected : null;
 
         // Only include rows that have any data
-        if (open || delivIn || transOut || transIn || actual !== null) {
+        if (open || delivIn || transOut || transIn || salesOut || actual !== null) {
           rows.push({
             locationId: loc.id, locationName: loc.name,
             skuId: sku.id, skuName: sku.name, unit: sku.unit,
-            opening: open, deliveriesIn: delivIn, transfersOut: transOut, transfersIn: transIn,
+            opening: open, deliveriesIn: delivIn, transfersOut: transOut, transfersIn: transIn, salesOut,
             expected, actual, variance,
           });
         }

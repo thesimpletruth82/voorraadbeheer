@@ -172,9 +172,10 @@
       $feed.innerHTML = movements.map(m => {
         const time = new Date(m.moved_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const skuName = m.sku?.name || '?';
-        let desc = m.type === 'transfer'
-          ? `${m.from_loc?.name || '?'} → ${m.to_loc?.name || '?'}`
-          : `Delivery → ${m.to_loc?.name || '?'}`;
+        let desc;
+        if (m.type === 'transfer') desc = `${m.from_loc?.name || '?'} → ${m.to_loc?.name || '?'}`;
+        else if (m.type === 'delivery') desc = `Delivery → ${m.to_loc?.name || '?'}`;
+        else desc = `Sale @ ${m.from_loc?.name || '?'}`;
 
         return `
           <div class="feed-item">

@@ -57,7 +57,7 @@ CREATE TABLE movements (
   to_location_id   UUID REFERENCES locations(id),
   sku_id           UUID NOT NULL REFERENCES skus(id) ON DELETE CASCADE,
   quantity         NUMERIC NOT NULL CHECK (quantity > 0),
-  type             TEXT NOT NULL CHECK (type IN ('transfer', 'delivery')),
+  type             TEXT NOT NULL CHECK (type IN ('transfer', 'delivery', 'sale')),
   moved_at         TIMESTAMPTZ DEFAULT NOW(),
   notes            TEXT
 );
