@@ -272,22 +272,23 @@
           </tr>`;
         }).join('');
 
-        // ── Stacked bar chart ──────────────────
-        const nonLiters = entries.filter(e => e.sku.unit !== 'liters');
-        const liters = entries.filter(e => e.sku.unit === 'liters');
-        const allTotals = entries.map(e => e.totalSupply);
-        const maxVal = Math.max(...allTotals, 1);
-        const chartH = 160; // px
+        // ── Stacked bar charts — one section per UOM ──
+        const byUnit = {};
+        for (const e of entries) {
+          const u = e.sku.unit;
+          if (!byUnit[u]) byUnit[u] = [];
+          byUnit[u].push(e);
+        }
 
-        function barCols(items) {
+        const chartH = 150;
+
+        function renderSection(items, maxVal) {
           return items.map(e => {
             const total = e.totalSupply;
             const sold = e.salesOut;
-            const remaining = Math.max(0, total - sold);
             const totalH = (total / maxVal) * chartH;
             const soldH = total > 0 ? (sold / total) * totalH : 0;
             const remainH = totalH - soldH;
-            // Short name for label
             const shortName = e.sku.name.length > 10 ? e.sku.name.substring(0, 9) + '...' : e.sku.name;
 
             return `
@@ -302,15 +303,15 @@
           }).join('');
         }
 
-        let chartHTML = '<div class="bar-chart">';
-        chartHTML += barCols(nonLiters);
-        if (nonLiters.length && liters.length) {
-          chartHTML += '<div class="chart-divider"></div><div class="chart-divider-label">Liters</div>';
+        const unitNames = Object.keys(byUnit).sort();
+        let chartHTML = '';
+        for (const unit of unitNames) {
+          const items = byUnit[unit];
+          const sectionMax = Math.max(...items.map(e => e.totalSupply), 1);
+          const label = unit.charAt(0).toUpperCase() + unit.slice(1);
+          chartHTML += `<div class="chart-section-label">${esc(label)}</div>`;
+          chartHTML += `<div class="bar-chart">${renderSection(items, sectionMax)}</div>`;
         }
-        if (liters.length) {
-          chartHTML += barCols(liters);
-        }
-        chartHTML += '</div>';
         chartHTML += `<div class="chart-legend">
           <span><span class="legend-dot legend-stock"></span>Remaining</span>
           <span><span class="legend-dot legend-sold"></span>Sold</span>
