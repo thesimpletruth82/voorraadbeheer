@@ -24,15 +24,20 @@ CREATE TABLE IF NOT EXISTS profiles (
 );
 
 -- Auto-create profile on user signup
-CREATE OR REPLACE FUNCTION handle_new_user()
-RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- SET search_path = public is required by Supabase for SECURITY DEFINER functions
+-- so the function can resolve public.profiles at runtime.
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER SET search_path = public
+AS $$
 BEGIN
-  INSERT INTO profiles (id, email, name, role)
+  INSERT INTO public.profiles (id, email, name, role)
   VALUES (
     NEW.id,
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'name', ''),
-    COALESCE(NEW.raw_user_meta_data->>'role', 'runner')
+    'runner'
   )
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
@@ -124,7 +129,10 @@ DROP POLICY IF EXISTS "p_sel"  ON profiles;
 DROP POLICY IF EXISTS "p_ins"  ON profiles;
 DROP POLICY IF EXISTS "p_upd"  ON profiles;
 CREATE POLICY "p_sel" ON profiles FOR SELECT USING (id = auth.uid() OR get_my_role() = 'admin');
-CREATE POLICY "p_ins" ON profiles FOR INSERT WITH CHECK (id = auth.uid());
+-- WITH CHECK (true): auth.uid() is NULL when the signup trigger fires,
+-- so we can't use id = auth.uid() here. The REFERENCES auth.users(id) FK
+-- already ensures only real users can have a profile.
+CREATE POLICY "p_ins" ON profiles FOR INSERT WITH CHECK (true);
 CREATE POLICY "p_upd" ON profiles FOR UPDATE USING (get_my_role() = 'admin');
 
 -- Events (all authenticated can read; only admin can write)
