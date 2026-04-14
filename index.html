@@ -3,19 +3,149 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Festival Voorraadbeheer</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>StockFest — Inloggen</title>
+  <link rel="stylesheet" href="/css/style.css">
 </head>
-<body class="min-h-screen bg-gray-900 flex items-center justify-center">
-  <div class="text-center text-white">
-    <div class="text-5xl mb-4">🍺</div>
-    <h1 class="text-2xl font-bold mb-2">Festival Voorraadbeheer</h1>
-    <p class="text-gray-400 mb-8">Kies een pagina:</p>
-    <div class="flex flex-col sm:flex-row gap-4 justify-center">
-      <a href="/dashboard" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold px-8 py-3 rounded-xl transition-colors">📊 Dashboard</a>
-      <a href="/form" class="bg-green-600 hover:bg-green-700 text-white font-semibold px-8 py-3 rounded-xl transition-colors">📝 Invulformulier</a>
-      <a href="/admin" class="bg-gray-600 hover:bg-gray-700 text-white font-semibold px-8 py-3 rounded-xl transition-colors">⚙️ Beheer</a>
+<body>
+<div id="toast" style="display:none"></div>
+<div class="login-wrap">
+  <div class="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">
+        <i data-lucide="beer" style="color:white"></i>
+      </div>
+      <div class="login-title">StockFest</div>
+      <div class="login-sub">Festival voorraadbeheer</div>
+    </div>
+
+    <div id="login-error" class="login-error" style="display:none"></div>
+
+    <!-- Login form -->
+    <div id="form-login">
+      <div class="form-group">
+        <label>E-mailadres</label>
+        <input id="login-email" type="email" placeholder="naam@voorbeeld.nl" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button id="btn-login" class="btn btn-primary btn-full" style="margin-top:4px">
+        Inloggen
+      </button>
+      <div class="login-toggle">
+        Nog geen account? <a onclick="toggle('register')">Registreren</a>
+      </div>
+    </div>
+
+    <!-- Register form -->
+    <div id="form-register" style="display:none">
+      <div class="form-group">
+        <label>Naam</label>
+        <input id="reg-name" type="text" placeholder="Jouw naam">
+      </div>
+      <div class="form-group">
+        <label>E-mailadres</label>
+        <input id="reg-email" type="email" placeholder="naam@voorbeeld.nl" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Wachtwoord</label>
+        <input id="reg-password" type="password" placeholder="Min. 6 tekens" autocomplete="new-password">
+      </div>
+      <button id="btn-register" class="btn btn-primary btn-full" style="margin-top:4px">
+        Account aanmaken
+      </button>
+      <div class="login-toggle">
+        Al een account? <a onclick="toggle('login')">Inloggen</a>
+      </div>
+      <div style="margin-top:14px;padding:10px 12px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px;font-size:12px;color:#93c5fd">
+        Na registratie heeft je account standaard de rol <strong>runner</strong>. Vraag een admin je rol te wijzigen via Gebruikersbeheer.
+      </div>
     </div>
   </div>
+</div>
+
+<!-- Scripts at bottom — NOT render-blocking -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="/js/supabase.js"></script>
+<script>
+  if (window.lucide) lucide.createIcons();
+
+  // Check for existing session — redirect if already logged in
+  (async () => {
+    try {
+      const profile = await Auth.getProfile();
+      if (profile) {
+        location.href = profile.role === 'admin' ? '/admin' : '/runner';
+      }
+    } catch (e) {
+      // No session or DB not ready — stay on login page
+    }
+  })();
+
+  function setError(msg) {
+    const el = document.getElementById('login-error');
+    el.textContent = msg;
+    el.style.display = msg ? '' : 'none';
+  }
+
+  function toggle(mode) {
+    setError('');
+    document.getElementById('form-login').style.display    = mode === 'login'    ? '' : 'none';
+    document.getElementById('form-register').style.display = mode === 'register' ? '' : 'none';
+  }
+
+  document.getElementById('btn-login').addEventListener('click', async () => {
+    const email    = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    if (!email || !password) { setError('Vul e-mail en wachtwoord in.'); return; }
+
+    const btn = document.getElementById('btn-login');
+    btn.disabled = true; btn.textContent = 'Bezig...';
+
+    const { error } = await Auth.signIn(email, password);
+    btn.disabled = false;
+    btn.textContent = 'Inloggen';
+
+    if (error) { setError(error.message); return; }
+
+    try {
+      const profile = await Auth.getProfile();
+      location.href = profile?.role === 'admin' ? '/admin' : '/runner';
+    } catch (e) {
+      location.href = '/runner';
+    }
+  });
+
+  document.getElementById('btn-register').addEventListener('click', async () => {
+    const name     = document.getElementById('reg-name').value.trim();
+    const email    = document.getElementById('reg-email').value.trim();
+    const password = document.getElementById('reg-password').value;
+    if (!name || !email || !password) { setError('Vul alle velden in.'); return; }
+    if (password.length < 6) { setError('Wachtwoord moet min. 6 tekens zijn.'); return; }
+
+    const btn = document.getElementById('btn-register');
+    btn.disabled = true; btn.textContent = 'Bezig...';
+
+    const { error } = await Auth.signUp(email, password, name);
+    btn.disabled = false;
+    btn.textContent = 'Account aanmaken';
+
+    if (error) { setError(error.message); return; }
+    setError('');
+    toggle('login');
+    document.getElementById('login-error').style.display = '';
+    document.getElementById('login-error').style.color = '#34d399';
+    document.getElementById('login-error').textContent = 'Account aangemaakt! Controleer je e-mail om te bevestigen.';
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    const loginVisible = document.getElementById('form-login').style.display !== 'none';
+    if (loginVisible) document.getElementById('btn-login').click();
+    else document.getElementById('btn-register').click();
+  });
+</script>
 </body>
 </html>

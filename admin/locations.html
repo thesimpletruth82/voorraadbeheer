@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Locaties — StockFest</title>
+  <link rel="stylesheet" href="/css/style.css">
+
+</head>
+<body>
+<div id="toast" class="hidden"></div>
+<div class="admin-layout">
+  <aside class="sidebar" id="admin-sidebar"></aside>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Locaties</h1>
+      <p id="page-sub">Bars en opslagpunten voor het evenement. Wijs per locatie toe welke producten er zijn.</p>
+    </div>
+    <div class="page-body">
+      <div class="grid-2" style="margin-bottom:24px">
+        <div class="card">
+          <div class="card-title"><i data-lucide="map-pin"></i> Locatie toevoegen</div>
+          <div class="form-group">
+            <label>Naam</label>
+            <input id="loc-name" type="text" placeholder="bijv. Bar Noord, Opslag Centrum">
+          </div>
+          <button id="btn-add-loc" class="btn btn-primary btn-full">
+            <i data-lucide="plus"></i> Toevoegen
+          </button>
+          <div style="margin-top:14px;padding:10px 12px;background:rgba(59,130,246,.07);border:1px solid rgba(59,130,246,.15);border-radius:8px;font-size:12px;color:#93c5fd">
+            <strong>Tip:</strong> Voeg alle locaties toe en vink daarna per locatie aan welke producten er beschikbaar zijn. Gebruik "Alles ✓" voor snel toewijzen.
+          </div>
+        </div>
+        <div class="card" id="loc-list-card">
+          <div class="card-title"><i data-lucide="list"></i> Locaties</div>
+          <div id="loc-summary"></div>
+        </div>
+      </div>
+
+      <div id="loc-sku-section"></div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="/js/supabase.js"></script>
+<script src="/js/db.js"></script>
+<script src="/js/admin-nav.js"></script>
+<script>
+let _profile, _locations = [], _skus = [], _lsMap = {};
+const eventId = Auth.getEventId();
+
+document.addEventListener('DOMContentLoaded', async () => {
+  _profile = await Auth.require('admin');
+  if (!_profile) return;
+  renderAdminNav('locations', _profile);
+
+  if (!eventId) {
+    document.querySelector('.page-body').innerHTML = `
+      <div class="card" style="text-align:center;padding:40px">
+        <i data-lucide="alert-circle" style="width:36px;height:36px;color:var(--amber);margin-bottom:12px"></i>
+        <p>Selecteer eerst een evenement via <a href="/admin">Evenementen</a>.</p>
+      </div>`;
+    lucide.createIcons(); return;
+  }
+
+  document.getElementById('btn-add-loc').addEventListener('click', handleAddLoc);
+  document.getElementById('loc-name').addEventListener('keydown', e => e.key === 'Enter' && handleAddLoc());
+  await loadAll();
+  lucide.createIcons();
+});
+
+async function loadAll() {
+  [_locations, _skus, _lsMap] = await Promise.all([
+    DB.getLocations(eventId),
+    DB.getSkus(),
+    DB.getLocationSkuMap(eventId),
+  ]);
+  renderSummary();
+  renderSkuSection();
+  lucide.createIcons();
+}
+
+function renderSummary() {
+  const el = document.getElementById('loc-summary');
+  if (!_locations.length) {
+    el.innerHTML = '<div class="empty-state" style="padding:20px 0"><p>Nog geen locaties.</p></div>';
+    return;
+  }
+  el.innerHTML = _locations.map(loc => {
+    const assigned = _lsMap[loc.id]?.size || 0;
+    return `
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--border)">
+        <div>
+          <span style="font-weight:600;color:#f1f5f9;font-size:13px">${esc(loc.name)}</span>
+          <span style="font-size:11px;color:var(--text3);margin-left:8px">${assigned} producten</span>
+        </div>
+        <button class="btn btn-danger btn-sm" onclick="handleDeleteLoc('${loc.id}')">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </div>`;
+  }).join('');
+}
+
+function renderSkuSection() {
+  const el = document.getElementById('loc-sku-section');
+  if (!_locations.length) { el.innerHTML = ''; return; }
+
+  el.innerHTML = _locations.map(loc => {
+    const assigned = _lsMap[loc.id] || new Set();
+    const rows = _skus.map(sku => `
+      <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;padding:5px 6px;border-radius:6px;transition:background .1s" onmouseover="this.style.background='rgba(255,255,255,.04)'" onmouseout="this.style.background=''">
+        <input type="checkbox" ${assigned.has(sku.id) ? 'checked' : ''}
+          onchange="toggleSku('${loc.id}','${sku.id}',this.checked)"
+          style="width:auto;accent-color:var(--accent)">
+        <span style="color:var(--text2)">${esc(sku.name)}</span>
+        <span style="color:var(--text4);font-size:11px">${esc(sku.unit)}</span>
+      </label>`).join('');
+
+    return `
+      <div class="card" style="margin-bottom:16px">
+        <div class="card-title" style="justify-content:space-between">
+          <span><i data-lucide="map-pin"></i> ${esc(loc.name)}</span>
+          <button class="btn btn-ghost btn-sm" onclick="assignAll('${loc.id}')">
+            <i data-lucide="check-square"></i> Alles ✓
+          </button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:2px">
+          ${rows}
+        </div>
+      </div>`;
+  }).join('');
+  lucide.createIcons();
+}
+
+async function handleAddLoc() {
+  const name = document.getElementById('loc-name').value.trim();
+  if (!name) { showToast('Vul een naam in.', 'error'); return; }
+  const btn = document.getElementById('btn-add-loc');
+  btn.disabled = true;
+  const { error } = await DB.createLocation(eventId, name);
+  btn.disabled = false;
+  if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+  document.getElementById('loc-name').value = '';
+  showToast('Locatie toegevoegd', 'ok');
+  await loadAll();
+}
+
+async function handleDeleteLoc(id) {
+  if (!confirm('Locatie verwijderen? Alle bijbehorende tellingen en bewegingen gaan ook verloren.')) return;
+  const { error } = await DB.deleteLocation(id);
+  if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+  showToast('Locatie verwijderd', 'ok');
+  await loadAll();
+}
+
+async function toggleSku(locId, skuId, checked) {
+  await DB.setLocationSku(locId, skuId, checked);
+  if (!_lsMap[locId]) _lsMap[locId] = new Set();
+  if (checked) _lsMap[locId].add(skuId);
+  else _lsMap[locId].delete(skuId);
+  renderSummary();
+}
+
+async function assignAll(locId) {
+  await DB.assignAllSkusToLocation(locId, _skus.map(s => s.id));
+  _lsMap[locId] = new Set(_skus.map(s => s.id));
+  renderSummary();
+  renderSkuSection();
+  showToast('Alle producten toegewezen', 'ok');
+}
+
+function esc(s) { return String(s).replace(/['"<>&]/g, c => ({'\'':'&#39;','"':'&quot;','<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+</script>
+</body>
+</html>

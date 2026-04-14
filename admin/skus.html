@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Producten — StockFest</title>
+  <link rel="stylesheet" href="/css/style.css">
+
+</head>
+<body>
+<div id="toast" class="hidden"></div>
+<div class="admin-layout">
+  <aside class="sidebar" id="admin-sidebar"></aside>
+  <main class="main-content">
+    <div class="page-header">
+      <h1>Producten</h1>
+      <p>Globale productencatalogus — beschikbaar voor alle evenementen.</p>
+    </div>
+    <div class="page-body">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title"><i data-lucide="plus-circle"></i> Product toevoegen</div>
+          <div class="form-group">
+            <label>Naam</label>
+            <input id="sku-name" type="text" placeholder="bijv. Heineken 33cl">
+          </div>
+          <div class="form-group">
+            <label>Eenheid</label>
+            <input id="sku-unit" type="text" placeholder="stuks / liter / fust / ...">
+          </div>
+          <button id="btn-add-sku" class="btn btn-primary btn-full">
+            <i data-lucide="plus"></i> Toevoegen
+          </button>
+        </div>
+
+        <div class="card">
+          <div class="card-title"><i data-lucide="package"></i> Producten <span id="sku-count" class="badge badge-gray" style="margin-left:4px">0</span></div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th>
+                  <th>Eenheid</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="sku-list"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+<script src="/js/supabase.js"></script>
+<script src="/js/db.js"></script>
+<script src="/js/admin-nav.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+  const profile = await Auth.require('admin');
+  if (!profile) return;
+  renderAdminNav('skus', profile);
+  await loadSkus();
+  document.getElementById('btn-add-sku').addEventListener('click', handleAdd);
+  document.getElementById('sku-name').addEventListener('keydown', e => e.key === 'Enter' && handleAdd());
+  lucide.createIcons();
+});
+
+async function loadSkus() {
+  const skus = await DB.getSkus();
+  document.getElementById('sku-count').textContent = skus.length;
+  const tbody = document.getElementById('sku-list');
+  if (!skus.length) {
+    tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:var(--text3);padding:20px">Geen producten.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = skus.map(s => `
+    <tr>
+      <td><strong>${esc(s.name)}</strong></td>
+      <td>${esc(s.unit)}</td>
+      <td class="right">
+        <button class="btn btn-danger btn-sm" onclick="handleDelete('${s.id}')">
+          <i data-lucide="trash-2"></i>
+        </button>
+      </td>
+    </tr>`).join('');
+  lucide.createIcons();
+}
+
+async function handleAdd() {
+  const name = document.getElementById('sku-name').value.trim();
+  const unit = document.getElementById('sku-unit').value.trim() || 'stuks';
+  if (!name) { showToast('Vul een naam in.', 'error'); return; }
+  const btn = document.getElementById('btn-add-sku');
+  btn.disabled = true;
+  const { error } = await DB.createSku(name, unit);
+  btn.disabled = false;
+  if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+  document.getElementById('sku-name').value = '';
+  document.getElementById('sku-unit').value = '';
+  showToast('Product toegevoegd', 'ok');
+  await loadSkus();
+}
+
+async function handleDelete(id) {
+  if (!confirm('Product permanent verwijderen?')) return;
+  const { error } = await DB.deleteSku(id);
+  if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+  showToast('Product verwijderd', 'ok');
+  await loadSkus();
+}
+
+function esc(s) { return String(s).replace(/['"<>&]/g, c => ({'\'':'&#39;','"':'&quot;','<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
+</script>
+</body>
+</html>

@@ -1,4 +1,15 @@
 {
   "cleanUrls": true,
-  "trailingSlash": false
+  "trailingSlash": false,
+  "rewrites": [
+    { "source": "/admin",           "destination": "/admin/index.html" },
+    { "source": "/admin/locations", "destination": "/admin/locations.html" },
+    { "source": "/admin/skus",      "destination": "/admin/skus.html" },
+    { "source": "/admin/opening",   "destination": "/admin/opening.html" },
+    { "source": "/admin/overview",  "destination": "/admin/overview.html" },
+    { "source": "/admin/closing",   "destination": "/admin/closing.html" },
+    { "source": "/admin/variance",  "destination": "/admin/variance.html" },
+    { "source": "/admin/users",     "destination": "/admin/users.html" },
+    { "source": "/runner",          "destination": "/runner/index.html" }
+  ]
 }
