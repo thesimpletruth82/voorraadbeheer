@@ -23,6 +23,8 @@
       flex: none;
       min-width: 0;
     }
+    .chart-section-liters .bar-col { flex: 0 0 30px; width: 30px; }
+    .chart-section-liters .bar-label-col { flex: 0 0 30px; width: 30px; }
     .chart-section-title {
       font-size: 11px;
       font-weight: 600;
@@ -399,7 +401,8 @@
           const items = byUnit[unit];
           const sectionMax = Math.max(...items.map(e => e.totalSupply), 1);
           const label = unit.charAt(0).toUpperCase() + unit.slice(1);
-          chartHTML += `<div class="chart-section">`;
+          const sectionCls = unit === 'liters' ? ' chart-section-liters' : '';
+          chartHTML += `<div class="chart-section${sectionCls}">`;
           chartHTML += `<div class="chart-section-title">${esc(label)}</div>`;
           chartHTML += renderSection(items, sectionMax);
           chartHTML += `</div>`;
