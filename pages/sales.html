@@ -162,15 +162,36 @@
     }
 
     function updateSummary() {
-      const total = Object.values(tapCounts).reduce((a, b) => a + b, 0);
+      const tapTotal = Object.values(tapCounts).reduce((a, b) => a + b, 0);
+      const literTotal = countLiterSales();
+      const total = tapTotal + literTotal;
       const $summary = document.getElementById('summary');
       const $count = document.getElementById('totalCount');
       if (total > 0) {
         $summary.classList.remove('hidden');
-        $count.textContent = total + ' item' + (total !== 1 ? 's' : '');
+        const parts = [];
+        if (tapTotal > 0) parts.push(tapTotal + ' item' + (tapTotal !== 1 ? 's' : ''));
+        if (literTotal > 0) parts.push(literTotal + 'L');
+        $count.textContent = parts.join(' + ');
       } else {
         $summary.classList.add('hidden');
       }
+    }
+
+    function countLiterSales() {
+      const locId = document.getElementById('saleLoc')?.value;
+      const locStock = expectedStock[locId] || {};
+      let total = 0;
+      for (const s of skus) {
+        if (s.unit !== 'liters') continue;
+        const input = document.getElementById('liter-' + s.id);
+        if (input && input.value !== '') {
+          const exp = parseInt(input.dataset.expected) || 0;
+          const sold = exp - (parseInt(input.value) || 0);
+          if (sold > 0) total += sold;
+        }
+      }
+      return total;
     }
 
     function clearTaps() {
@@ -201,7 +222,7 @@
             </div>
             <div class="stepper stepper-lg">
               <button type="button" class="stepper-btn" onclick="literStep('${s.id}',-10)">−</button>
-              <input type="number" id="liter-${s.id}" data-expected="${exp}" value="" min="0" placeholder="${exp}" onchange="literDelta('${s.id}')">
+              <input type="number" id="liter-${s.id}" data-expected="${exp}" value="" min="0" placeholder="${exp}" onchange="literDelta('${s.id}'); updateSummary()">
               <button type="button" class="stepper-btn" onclick="literStep('${s.id}',10)">+</button>
             </div>
             <div class="liter-delta delta-none" id="ldelta-${s.id}">—</div>
@@ -216,6 +237,7 @@
       const cur = input.value === '' ? exp : parseInt(input.value) || 0;
       input.value = Math.max(0, cur + delta);
       literDelta(skuId);
+      updateSummary();
     }
 
     function literDelta(skuId) {
