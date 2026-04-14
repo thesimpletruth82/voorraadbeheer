@@ -8,7 +8,6 @@
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
-    /* ── Stacked bar chart ─────────────────────────────── */
     .bar-chart-wrap {
       margin-top: 24px;
       border-top: 1px solid var(--border);
@@ -16,86 +15,141 @@
     }
     .chart-sections {
       display: flex;
-      gap: 24px;
+      gap: 32px;
       overflow-x: auto;
+      align-items: flex-end;
     }
     .chart-section {
       flex: 1;
       min-width: 0;
     }
-    .bar-chart {
+    .chart-section-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text3);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      margin-bottom: 8px;
+    }
+
+    /* Chart area with y-axis */
+    .chart-area {
+      display: flex;
+      position: relative;
+    }
+    .chart-yaxis {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      align-items: flex-end;
+      padding-right: 8px;
+      height: 200px;
+      flex-shrink: 0;
+    }
+    .chart-yaxis span {
+      font-size: 9px;
+      color: var(--text4);
+      line-height: 1;
+    }
+    .chart-grid {
+      position: relative;
+      flex: 1;
+      height: 200px;
+      min-width: 0;
+    }
+    .chart-gridline {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* Bars container */
+    .bar-row {
       display: flex;
       align-items: flex-end;
-      gap: 14px;
-      height: 170px;
-      min-width: min-content;
-      padding: 0 4px;
+      gap: 6px;
+      height: 200px;
+      position: relative;
+      z-index: 1;
+      overflow-x: auto;
+      padding-bottom: 0;
     }
     .bar-col {
       display: flex;
       flex-direction: column;
       align-items: center;
-      flex: 0 0 auto;
-      width: 18px;
+      flex: 1;
+      min-width: 32px;
+      max-width: 56px;
     }
     .bar-stack {
       width: 100%;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      border-radius: 4px 4px 0 0;
-      overflow: hidden;
+      border-radius: 3px 3px 0 0;
+      overflow: visible;
       position: relative;
     }
-    .bar-segment {
+    .bar-seg {
       width: 100%;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       transition: height .4s ease;
-    }
-    /* Sold at bottom, stock on top */
-    .bar-seg-stock {
-      background: #34d399;
-      box-shadow: 0 0 12px rgba(52,211,153,.35), inset 0 1px 0 rgba(255,255,255,.15);
-    }
-    .bar-seg-sold {
-      background: #f43f5e;
-      box-shadow: 0 0 12px rgba(244,63,94,.35), inset 0 -1px 0 rgba(255,255,255,.1);
-    }
-    .bar-label {
-      font-size: 8px;
-      color: var(--text3);
-      text-align: center;
-      margin-top: 5px;
-      line-height: 1.15;
-      word-break: break-word;
-      max-width: 50px;
-      height: 24px;
       overflow: hidden;
     }
-    .bar-value {
-      font-size: 9px;
-      font-weight: 700;
-      color: var(--text);
-      margin-bottom: 3px;
-      text-align: center;
+    .bar-seg-stock {
+      background: rgba(52, 211, 153, .55);
+      border-radius: 3px 3px 0 0;
     }
-    .bar-sold-label {
-      font-size: 7px;
+    .bar-seg-sold {
+      background: rgba(244, 63, 94, .55);
+    }
+    .bar-seg-val {
+      font-size: 10px;
       font-weight: 700;
       color: #fff;
-      text-align: center;
+      text-shadow: 0 1px 3px rgba(0,0,0,.5);
       line-height: 1;
-      padding: 2px 0;
-      text-shadow: 0 1px 2px rgba(0,0,0,.4);
-      position: absolute;
-      bottom: 2px;
-      left: 0;
-      right: 0;
       pointer-events: none;
     }
+
+    /* Label below bar */
+    .bar-label {
+      font-size: 9px;
+      color: var(--text3);
+      text-align: center;
+      margin-top: 6px;
+      transform: rotate(-40deg);
+      transform-origin: top center;
+      white-space: nowrap;
+      max-width: 80px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .bar-labels {
+      display: flex;
+      gap: 6px;
+      padding-top: 4px;
+    }
+    .bar-label-col {
+      flex: 1;
+      min-width: 32px;
+      max-width: 56px;
+      height: 50px;
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Legend */
     .chart-legend {
       display: flex;
       gap: 16px;
-      padding: 10px 0 0;
+      padding: 8px 0 0;
       font-size: 11px;
       color: var(--text2);
     }
@@ -107,8 +161,8 @@
       margin-right: 4px;
       vertical-align: middle;
     }
-    .legend-stock { background: #34d399; box-shadow: 0 0 6px rgba(52,211,153,.4); }
-    .legend-sold  { background: #f43f5e; box-shadow: 0 0 6px rgba(244,63,94,.4); }
+    .legend-stock { background: rgba(52,211,153,.55); }
+    .legend-sold  { background: rgba(244,63,94,.55); }
   </style>
 </head>
 <body>
@@ -286,29 +340,64 @@
           byUnit[u].push(e);
         }
 
-        const chartH = 150;
+        const chartH = 200;
 
         function renderSection(items, maxVal) {
-          return items.map(e => {
+          // Y-axis gridlines (5 steps)
+          const steps = 5;
+          const stepVal = Math.ceil(maxVal / steps);
+          const niceMax = stepVal * steps;
+
+          let gridHTML = '';
+          let yLabels = '';
+          for (let i = 0; i <= steps; i++) {
+            const val = stepVal * i;
+            const pct = (val / niceMax) * 100;
+            gridHTML += `<div class="chart-gridline" style="bottom:${pct}%"></div>`;
+          }
+          // Y-axis labels
+          let yHTML = '';
+          for (let i = steps; i >= 0; i--) {
+            yHTML += `<span>${stepVal * i}</span>`;
+          }
+
+          // Bars
+          const barsHTML = items.map(e => {
             const total = e.totalSupply;
             const sold = e.salesOut;
-            const totalH = (total / maxVal) * chartH;
+            const remaining = Math.max(0, total - sold);
+            const totalH = (total / niceMax) * chartH;
             const soldH = total > 0 ? (sold / total) * totalH : 0;
             const remainH = totalH - soldH;
-            const shortName = e.sku.name.length > 10 ? e.sku.name.substring(0, 9) + '...' : e.sku.name;
 
-            const soldLabel = sold > 0 && soldH >= 14 ? `<div class="bar-sold-label">${sold}</div>` : '';
+            const stockLabel = remaining > 0 && remainH >= 16 ? `<span class="bar-seg-val">${Math.round(remaining)}</span>` : '';
+            const soldLabel = sold > 0 && soldH >= 16 ? `<span class="bar-seg-val">${sold}</span>` : '';
 
-            return `
-              <div class="bar-col">
-                <div class="bar-value">${Math.round(e.current)}</div>
-                <div class="bar-stack" style="height:${Math.max(totalH, 2)}px">
-                  <div class="bar-segment bar-seg-stock" style="height:${remainH}px"></div>
-                  <div class="bar-segment bar-seg-sold" style="height:${soldH}px; position:relative;">${soldLabel}</div>
-                </div>
-                <div class="bar-label">${esc(shortName)}</div>
-              </div>`;
+            return `<div class="bar-col">
+              <div class="bar-stack" style="height:${Math.max(totalH, 2)}px">
+                <div class="bar-seg bar-seg-stock" style="height:${remainH}px">${stockLabel}</div>
+                <div class="bar-seg bar-seg-sold" style="height:${soldH}px">${soldLabel}</div>
+              </div>
+            </div>`;
           }).join('');
+
+          // Labels row
+          const labelsHTML = items.map(e => {
+            const name = e.sku.name.length > 16 ? e.sku.name.substring(0, 15) + '...' : e.sku.name;
+            return `<div class="bar-label-col"><div class="bar-label">${esc(name)}</div></div>`;
+          }).join('');
+
+          return `
+            <div class="chart-area">
+              <div class="chart-yaxis">${yHTML}</div>
+              <div class="chart-grid">
+                ${gridHTML}
+                <div class="bar-row">${barsHTML}</div>
+              </div>
+            </div>
+            <div style="margin-left:30px;">
+              <div class="bar-labels">${labelsHTML}</div>
+            </div>`;
         }
 
         const unitNames = Object.keys(byUnit).sort();
@@ -318,8 +407,8 @@
           const sectionMax = Math.max(...items.map(e => e.totalSupply), 1);
           const label = unit.charAt(0).toUpperCase() + unit.slice(1);
           chartHTML += `<div class="chart-section">`;
-          chartHTML += `<div class="chart-section-label">${esc(label)}</div>`;
-          chartHTML += `<div class="bar-chart">${renderSection(items, sectionMax)}</div>`;
+          chartHTML += `<div class="chart-section-title">${esc(label)}</div>`;
+          chartHTML += renderSection(items, sectionMax);
           chartHTML += `</div>`;
         }
         chartHTML += '</div>';
