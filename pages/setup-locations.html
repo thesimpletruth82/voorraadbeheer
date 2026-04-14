@@ -24,12 +24,19 @@
         </div>
 
         <div id="content" class="hidden">
+          <!-- Quick-add from previously used locations -->
+          <div class="card mb-6" id="previousCard" class="hidden">
+            <div class="card-title"><i data-lucide="clock"></i> Previously Used</div>
+            <div id="previousLocs" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
+          </div>
+
           <div class="card mb-6">
             <div class="card-title"><i data-lucide="plus-circle"></i> Add Location</div>
             <form id="addForm" class="form-row" style="align-items:flex-end; gap:10px;">
               <div class="form-group" style="flex:1; margin-bottom:0;">
                 <label>Location Name</label>
-                <input type="text" id="locName" placeholder="e.g. Bar North, Storage" required>
+                <input type="text" id="locName" list="locSuggestions" placeholder="e.g. Bar North, Storage" required>
+                <datalist id="locSuggestions"></datalist>
               </div>
               <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Add</button>
             </form>
@@ -55,8 +62,11 @@
       init();
     }
 
+    let currentLocNames = new Set();
+
     async function init() {
       await loadLocations();
+      await loadPreviousNames();
 
       document.getElementById('addForm').addEventListener('submit', async (ev) => {
         ev.preventDefault();
@@ -70,7 +80,40 @@
         toast('Location added');
         document.getElementById('locName').value = '';
         loadLocations();
+        loadPreviousNames();
       });
+    }
+
+    async function loadPreviousNames() {
+      const allNames = await DB.getAllLocationNames();
+      const locs = await DB.getLocations(eventId);
+      currentLocNames = new Set(locs.map(l => l.name));
+
+      // Datalist suggestions
+      document.getElementById('locSuggestions').innerHTML =
+        allNames.map(n => `<option value="${esc(n)}">`).join('');
+
+      // Quick-add buttons for names not yet in this event
+      const unused = allNames.filter(n => !currentLocNames.has(n));
+      const $card = document.getElementById('previousCard');
+      const $prev = document.getElementById('previousLocs');
+
+      if (unused.length) {
+        $card.classList.remove('hidden');
+        $prev.innerHTML = unused.map(n =>
+          `<button class="btn btn-sm btn-ghost" onclick="quickAdd('${esc(n)}')">${esc(n)}</button>`
+        ).join('');
+      } else {
+        $card.classList.add('hidden');
+      }
+    }
+
+    async function quickAdd(name) {
+      const { error } = await DB.createLocation(eventId, name);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('Location added');
+      loadLocations();
+      loadPreviousNames();
     }
 
     async function loadLocations() {

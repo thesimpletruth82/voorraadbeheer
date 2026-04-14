@@ -63,15 +63,12 @@
         const statusLabel = e.status.charAt(0).toUpperCase() + e.status.slice(1);
 
         let actions = '';
-        if (e.status === 'setup') {
+        if (e.status === 'active') {
+          actions += `<button class="btn btn-sm btn-ghost" onclick="deactivate('${e.id}')"><i data-lucide="pause"></i> Deactivate</button>`;
+        } else {
           actions += `<button class="btn btn-sm btn-success" onclick="activate('${e.id}','${esc(e.name)}')"><i data-lucide="play"></i> Activate</button>`;
-        } else if (e.status === 'active') {
-          actions += `<button class="btn btn-sm btn-ghost" onclick="closeEvent('${e.id}')"><i data-lucide="lock"></i> Close</button>`;
         }
-        actions += `<button class="btn btn-sm btn-ghost" onclick="selectEvent('${e.id}','${esc(e.name)}','${e.status}')"><i data-lucide="arrow-right"></i></button>`;
-        if (e.status !== 'active') {
-          actions += `<button class="btn btn-sm btn-danger" onclick="del('${e.id}')"><i data-lucide="trash-2"></i></button>`;
-        }
+        actions += `<button class="btn btn-sm btn-danger" onclick="del('${e.id}')"><i data-lucide="trash-2"></i></button>`;
 
         return `
           <div class="event-card">
@@ -101,9 +98,12 @@
     });
 
     async function activate(id, name) {
+      // Deactivate any currently active event first
       const events = await DB.getEvents();
       for (const e of events) {
-        if (e.status === 'active') await DB.updateEventStatus(e.id, 'closed');
+        if (e.status === 'active' && e.id !== id) {
+          await DB.updateEventStatus(e.id, 'closed');
+        }
       }
       await DB.updateEventStatus(id, 'active');
       Ctx.set(id, name, 'active');
@@ -112,10 +112,10 @@
       loadEvents();
     }
 
-    async function closeEvent(id) {
+    async function deactivate(id) {
       await DB.updateEventStatus(id, 'closed');
       if (Ctx.id() === id) Ctx.clear();
-      toast('Event closed');
+      toast('Event deactivated');
       renderNav('events');
       loadEvents();
     }
@@ -128,12 +128,6 @@
       toast('Event deleted');
       renderNav('events');
       loadEvents();
-    }
-
-    function selectEvent(id, name, status) {
-      Ctx.set(id, name, status);
-      renderNav('events');
-      window.location.href = '/pages/overview.html';
     }
 
     loadEvents();

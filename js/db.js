@@ -24,6 +24,12 @@ const DB = {
     const { data } = await sb().from('locations').select('*').eq('event_id', eventId).order('name');
     return data || [];
   },
+  async getAllLocationNames() {
+    const { data } = await sb().from('locations').select('name');
+    const unique = [...new Set((data || []).map(r => r.name))].sort();
+    return unique;
+  },
+
   async createLocation(eventId, name) {
     const { data, error } = await sb().from('locations').insert({ event_id: eventId, name }).select().single();
     return { data, error };
