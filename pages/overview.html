@@ -10,31 +10,32 @@
   <style>
     /* ── Stacked bar chart ─────────────────────────────── */
     .bar-chart-wrap {
-      padding: 16px 0 8px;
-      overflow-x: auto;
+      padding: 8px 0;
+      margin-top: 20px;
+      border-top: 1px solid var(--border);
     }
     .bar-chart {
       display: flex;
       align-items: flex-end;
-      gap: 6px;
-      height: 180px;
+      gap: 4px;
+      height: 170px;
       min-width: min-content;
-      padding: 0 4px;
+      padding: 0 2px;
     }
     .bar-col {
       display: flex;
       flex-direction: column;
       align-items: center;
       flex: 1;
-      min-width: 38px;
-      max-width: 60px;
+      min-width: 24px;
+      max-width: 38px;
     }
     .bar-stack {
       width: 100%;
       display: flex;
       flex-direction: column;
       justify-content: flex-end;
-      border-radius: 5px 5px 0 0;
+      border-radius: 4px 4px 0 0;
       overflow: hidden;
       position: relative;
     }
@@ -42,28 +43,31 @@
       width: 100%;
       transition: height .4s ease;
     }
+    /* Sold at bottom, stock on top */
     .bar-seg-stock {
-      background: rgba(16,185,129,.45);
+      background: #22c55e;
+      box-shadow: 0 0 10px rgba(34,197,94,.3), inset 0 1px 0 rgba(255,255,255,.12);
     }
     .bar-seg-sold {
-      background: rgba(239,68,68,.55);
+      background: #f43f5e;
+      box-shadow: 0 0 10px rgba(244,63,94,.35), inset 0 -1px 0 rgba(255,255,255,.1);
     }
     .bar-label {
-      font-size: 9px;
+      font-size: 8px;
       color: var(--text3);
       text-align: center;
-      margin-top: 6px;
-      line-height: 1.2;
+      margin-top: 5px;
+      line-height: 1.15;
       word-break: break-word;
-      max-width: 58px;
-      height: 28px;
+      max-width: 42px;
+      height: 24px;
       overflow: hidden;
     }
     .bar-value {
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 700;
       color: var(--text);
-      margin-bottom: 4px;
+      margin-bottom: 3px;
       text-align: center;
     }
     .chart-legend {
@@ -81,28 +85,8 @@
       margin-right: 4px;
       vertical-align: middle;
     }
-    .legend-stock { background: rgba(16,185,129,.45); }
-    .legend-sold  { background: rgba(239,68,68,.55); }
-
-    /* Section divider for liters */
-    .chart-divider {
-      width: 1px;
-      background: var(--border2);
-      align-self: stretch;
-      margin: 0 4px;
-      flex-shrink: 0;
-    }
-    .chart-divider-label {
-      font-size: 9px;
-      color: var(--text3);
-      writing-mode: vertical-rl;
-      text-orientation: mixed;
-      align-self: center;
-      flex-shrink: 0;
-      letter-spacing: .04em;
-      text-transform: uppercase;
-      font-weight: 600;
-    }
+    .legend-stock { background: #22c55e; box-shadow: 0 0 6px rgba(34,197,94,.4); }
+    .legend-sold  { background: #f43f5e; box-shadow: 0 0 6px rgba(244,63,94,.4); }
   </style>
 </head>
 <body>
@@ -295,8 +279,8 @@
               <div class="bar-col">
                 <div class="bar-value">${Math.round(e.current)}</div>
                 <div class="bar-stack" style="height:${Math.max(totalH, 2)}px">
-                  <div class="bar-segment bar-seg-sold" style="height:${soldH}px"></div>
                   <div class="bar-segment bar-seg-stock" style="height:${remainH}px"></div>
+                  <div class="bar-segment bar-seg-sold" style="height:${soldH}px"></div>
                 </div>
                 <div class="bar-label">${esc(shortName)}</div>
               </div>`;

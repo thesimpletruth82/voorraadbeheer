@@ -629,15 +629,8 @@ tbody td strong { color: var(--text); }
   color: var(--text3);
   text-transform: uppercase;
   letter-spacing: .06em;
-  padding: 10px 0 4px;
-  border-top: 1px solid var(--border);
-  margin-top: 8px;
-}
-
-.chart-section-label:first-child {
-  border-top: none;
+  padding: 12px 0 6px;
   margin-top: 0;
-  padding-top: 0;
 }
 
 @media (max-width: 600px) {
