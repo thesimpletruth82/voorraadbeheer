@@ -7,6 +7,103 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    /* ── Stacked bar chart ─────────────────────────────── */
+    .bar-chart-wrap {
+      padding: 16px 0 8px;
+      overflow-x: auto;
+    }
+    .bar-chart {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      height: 180px;
+      min-width: min-content;
+      padding: 0 4px;
+    }
+    .bar-col {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      flex: 1;
+      min-width: 38px;
+      max-width: 60px;
+    }
+    .bar-stack {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      border-radius: 5px 5px 0 0;
+      overflow: hidden;
+      position: relative;
+    }
+    .bar-segment {
+      width: 100%;
+      transition: height .4s ease;
+    }
+    .bar-seg-stock {
+      background: rgba(16,185,129,.45);
+    }
+    .bar-seg-sold {
+      background: rgba(239,68,68,.55);
+    }
+    .bar-label {
+      font-size: 9px;
+      color: var(--text3);
+      text-align: center;
+      margin-top: 6px;
+      line-height: 1.2;
+      word-break: break-word;
+      max-width: 58px;
+      height: 28px;
+      overflow: hidden;
+    }
+    .bar-value {
+      font-size: 10px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+      text-align: center;
+    }
+    .chart-legend {
+      display: flex;
+      gap: 16px;
+      padding: 10px 0 0;
+      font-size: 11px;
+      color: var(--text2);
+    }
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      display: inline-block;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .legend-stock { background: rgba(16,185,129,.45); }
+    .legend-sold  { background: rgba(239,68,68,.55); }
+
+    /* Section divider for liters */
+    .chart-divider {
+      width: 1px;
+      background: var(--border2);
+      align-self: stretch;
+      margin: 0 4px;
+      flex-shrink: 0;
+    }
+    .chart-divider-label {
+      font-size: 9px;
+      color: var(--text3);
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      align-self: center;
+      flex-shrink: 0;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+  </style>
 </head>
 <body>
   <div class="app">
@@ -26,13 +123,9 @@
         </div>
 
         <div id="content" class="hidden">
-          <!-- Stats -->
           <div class="stats-row" id="stats"></div>
+          <div id="locationCards"></div>
 
-          <!-- Bar charts per location -->
-          <div id="charts"></div>
-
-          <!-- Movement feed -->
           <div class="card mt-4">
             <div class="card-title"><i data-lucide="clock"></i> Recent Movements</div>
             <div id="feed"></div>
@@ -71,25 +164,23 @@
         DB.getStockBreakdown(eventId),
         DB.getMovements(eventId, 30),
       ]);
-
       renderStats(locations, skus, breakdown, movements);
-      renderCharts(locations, skus, breakdown);
+      renderLocationCards(locations, skus, breakdown);
       renderFeed(movements);
     }
 
+    // ── Stats row ──────────────────────────────────────
     function renderStats(locations, skus, breakdown, movements) {
       let lowCount = 0, outCount = 0;
       for (const loc of locations) {
-        const locData = breakdown[loc.id] || {};
+        const ld = breakdown[loc.id] || {};
         for (const sku of skus) {
-          const d = locData[sku.id];
+          const d = ld[sku.id];
           if (!d) continue;
           if (d.current <= 0) outCount++;
           else if (d.current < LOW_THRESHOLD) lowCount++;
         }
       }
-
-      // Total sales count
       const salesCount = movements.filter(m => m.type === 'sale').length;
 
       document.getElementById('stats').innerHTML = `
@@ -117,38 +208,42 @@
       lucide.createIcons();
     }
 
-    function formatHours(h) {
-      if (h === null) return '';
+    // ── Helpers ────────────────────────────────────────
+    function fmtHours(h) {
+      if (h === null || h === undefined) return '—';
       if (h < 1) return Math.round(h * 60) + 'min';
       if (h < 24) return h.toFixed(1) + 'h';
       return Math.round(h / 24) + 'd';
     }
-
-    function timeClass(h) {
-      if (h === null) return '';
+    function timeCls(h) {
+      if (h === null || h === undefined) return 'text-muted';
       if (h < 1) return 'time-crit';
       if (h < 3) return 'time-warn';
       return 'time-ok';
     }
+    function fmtBurn(b) {
+      if (!b) return '—';
+      return b.toFixed(1) + '/h';
+    }
 
-    function renderCharts(locations, skus, breakdown) {
-      const $charts = document.getElementById('charts');
+    // ── Location cards (table + chart) ─────────────────
+    function renderLocationCards(locations, skus, breakdown) {
+      const $el = document.getElementById('locationCards');
 
       if (!locations.length) {
-        $charts.innerHTML = '<div class="empty-state"><i data-lucide="map-pin"></i><h3>No locations</h3><p>Add locations in <a href="/pages/setup-locations.html">Setup</a>.</p></div>';
+        $el.innerHTML = '<div class="empty-state"><i data-lucide="map-pin"></i><h3>No locations</h3><p>Add locations in <a href="/pages/setup-locations.html">Setup</a>.</p></div>';
         lucide.createIcons();
         return;
       }
 
-      // Build SKU lookup
       const skuMap = {};
       skus.forEach(s => skuMap[s.id] = s);
 
-      $charts.innerHTML = locations.map(loc => {
-        const locData = breakdown[loc.id] || {};
-        const entries = Object.entries(locData)
+      $el.innerHTML = locations.map(loc => {
+        const ld = breakdown[loc.id] || {};
+        const entries = Object.entries(ld)
           .map(([skuId, d]) => ({ sku: skuMap[skuId], ...d }))
-          .filter(e => e.sku && e.totalSupply > 0);
+          .filter(e => e.sku && (e.totalSupply > 0 || e.current !== 0));
 
         if (!entries.length) {
           return `
@@ -158,69 +253,96 @@
             </div>`;
         }
 
-        // Split liters from non-liters
+        // ── Table ──────────────────────────────
+        const tableRows = entries.map(e => {
+          let stockCls = '';
+          if (e.current <= 0) stockCls = 'var-neg';
+          else if (e.current < LOW_THRESHOLD) stockCls = 'style="color:var(--amber)"';
+          const stockStyle = e.current <= 0 ? ' class="var-neg"' : (e.current < LOW_THRESHOLD ? ' style="color:var(--amber);font-weight:600"' : '');
+
+          return `<tr>
+            <td><strong>${esc(e.sku.name)}</strong> <span class="text-xs text-muted">${esc(e.sku.unit)}</span></td>
+            <td class="right"><span${stockStyle}>${Math.round(e.current)}</span></td>
+            <td class="right">${e.salesOut || 0}</td>
+            <td class="right">${e.delivIn || 0}</td>
+            <td class="right">${e.transIn || 0}</td>
+            <td class="right">${e.transOut || 0}</td>
+            <td class="right">${fmtBurn(e.burnPerHour)}</td>
+            <td class="right"><span class="${timeCls(e.hoursLeft)}" style="font-weight:600">${fmtHours(e.hoursLeft)}</span></td>
+          </tr>`;
+        }).join('');
+
+        // ── Stacked bar chart ──────────────────
         const nonLiters = entries.filter(e => e.sku.unit !== 'liters');
         const liters = entries.filter(e => e.sku.unit === 'liters');
+        const allTotals = entries.map(e => e.totalSupply);
+        const maxVal = Math.max(...allTotals, 1);
+        const chartH = 160; // px
 
-        // Find max supply for scaling bars
-        const allSupply = entries.map(e => e.totalSupply);
-        const maxSupply = Math.max(...allSupply, 1);
-
-        function renderBars(items) {
+        function barCols(items) {
           return items.map(e => {
-            const totalPct = Math.max((e.totalSupply / maxSupply) * 100, 2);
-            const usedPct = e.totalSupply > 0 ? (e.used / e.totalSupply) * 100 : 0;
-            const burnStr = e.burnPerHour > 0 ? e.burnPerHour.toFixed(1) + '/hr' : '—';
-            const timeStr = formatHours(e.hoursLeft);
-            const timeCls = timeClass(e.hoursLeft);
-
-            let qtyClass = '';
-            if (e.current <= 0) qtyClass = 'time-crit';
-            else if (e.current < LOW_THRESHOLD) qtyClass = 'time-warn';
+            const total = e.totalSupply;
+            const sold = e.salesOut;
+            const remaining = Math.max(0, total - sold);
+            const totalH = (total / maxVal) * chartH;
+            const soldH = total > 0 ? (sold / total) * totalH : 0;
+            const remainH = totalH - soldH;
+            // Short name for label
+            const shortName = e.sku.name.length > 10 ? e.sku.name.substring(0, 9) + '...' : e.sku.name;
 
             return `
-              <div class="stock-bar-row">
-                <div class="stock-bar-label">${esc(e.sku.name)}</div>
-                <div class="stock-bar-wrap">
-                  <div class="stock-bar-total" style="width:${totalPct}%">
-                    <div class="stock-bar-used" style="width:${usedPct}%"></div>
-                  </div>
+              <div class="bar-col">
+                <div class="bar-value">${Math.round(e.current)}</div>
+                <div class="bar-stack" style="height:${Math.max(totalH, 2)}px">
+                  <div class="bar-segment bar-seg-sold" style="height:${soldH}px"></div>
+                  <div class="bar-segment bar-seg-stock" style="height:${remainH}px"></div>
                 </div>
-                <div class="stock-bar-meta">
-                  <div class="stock-bar-qty ${qtyClass}">${Math.round(e.current)} <span class="text-xs text-muted">${esc(e.sku.unit)}</span></div>
-                  <div class="stock-bar-burn">${burnStr}</div>
-                  ${timeStr ? `<div class="stock-bar-timeleft ${timeCls}">${timeStr} left</div>` : ''}
-                </div>
+                <div class="bar-label">${esc(shortName)}</div>
               </div>`;
           }).join('');
         }
 
-        let chartHTML = '<div class="stock-chart">';
-
+        let chartHTML = '<div class="bar-chart">';
+        chartHTML += barCols(nonLiters);
         if (nonLiters.length && liters.length) {
-          // Both sections
-          chartHTML += `<div class="chart-section-label">Units</div>`;
-          chartHTML += renderBars(nonLiters);
-          chartHTML += `<div class="chart-section-label">Liters</div>`;
-          chartHTML += renderBars(liters);
-        } else if (liters.length) {
-          chartHTML += `<div class="chart-section-label">Liters</div>`;
-          chartHTML += renderBars(liters);
-        } else {
-          chartHTML += renderBars(nonLiters);
+          chartHTML += '<div class="chart-divider"></div><div class="chart-divider-label">Liters</div>';
         }
-
+        if (liters.length) {
+          chartHTML += barCols(liters);
+        }
         chartHTML += '</div>';
+        chartHTML += `<div class="chart-legend">
+          <span><span class="legend-dot legend-stock"></span>Remaining</span>
+          <span><span class="legend-dot legend-sold"></span>Sold</span>
+        </div>`;
 
         return `
           <div class="card" style="margin-bottom:16px;">
             <div class="card-title"><i data-lucide="map-pin"></i> ${esc(loc.name)}</div>
-            ${chartHTML}
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th class="right">Stock</th>
+                    <th class="right">Sold</th>
+                    <th class="right">Deliv.</th>
+                    <th class="right">In</th>
+                    <th class="right">Out</th>
+                    <th class="right">Burn</th>
+                    <th class="right">ETA</th>
+                  </tr>
+                </thead>
+                <tbody>${tableRows}</tbody>
+              </table>
+            </div>
+            <div class="bar-chart-wrap">${chartHTML}</div>
           </div>`;
       }).join('');
       lucide.createIcons();
     }
 
+    // ── Feed ───────────────────────────────────────────
     function renderFeed(movements) {
       const $feed = document.getElementById('feed');
       if (!movements.length) {
@@ -248,6 +370,7 @@
       }).join('');
     }
 
+    // ── Realtime ───────────────────────────────────────
     function setupRealtime() {
       sb().channel('overview-movements')
         .on('postgres_changes', {
