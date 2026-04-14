@@ -20,7 +20,7 @@
       align-items: flex-end;
     }
     .chart-section {
-      flex: 1;
+      flex: none;
       min-width: 0;
     }
     .chart-section-title {
@@ -80,9 +80,8 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      flex: 1;
-      min-width: 32px;
-      max-width: 56px;
+      flex: 0 0 40px;
+      width: 40px;
     }
     .bar-stack {
       width: 100%;
@@ -122,27 +121,23 @@
     .bar-label {
       font-size: 9px;
       color: var(--text3);
-      text-align: center;
-      margin-top: 6px;
-      transform: rotate(-40deg);
-      transform-origin: top center;
       white-space: nowrap;
-      max-width: 80px;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      transform: rotate(-90deg);
+      transform-origin: top left;
+      position: absolute;
+      top: 6px;
+      left: 50%;
     }
     .bar-labels {
       display: flex;
       gap: 6px;
-      padding-top: 4px;
     }
     .bar-label-col {
-      flex: 1;
-      min-width: 32px;
-      max-width: 56px;
-      height: 50px;
-      display: flex;
-      justify-content: center;
+      flex: 0 0 40px;
+      width: 40px;
+      height: 100px;
+      position: relative;
+      overflow: visible;
     }
 
     /* Legend */
@@ -381,10 +376,9 @@
             </div>`;
           }).join('');
 
-          // Labels row
+          // Labels row — full name, no truncation
           const labelsHTML = items.map(e => {
-            const name = e.sku.name.length > 16 ? e.sku.name.substring(0, 15) + '...' : e.sku.name;
-            return `<div class="bar-label-col"><div class="bar-label">${esc(name)}</div></div>`;
+            return `<div class="bar-label-col"><div class="bar-label">${esc(e.sku.name)}</div></div>`;
           }).join('');
 
           return `
