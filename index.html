@@ -2,150 +2,256 @@
 <html lang="nl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StockFest — Inloggen</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>StockFest — Runner</title>
   <link rel="stylesheet" href="/css/style.css">
+
 </head>
 <body>
-<div id="toast" style="display:none"></div>
-<div class="login-wrap">
-  <div class="login-card">
-    <div class="login-logo">
-      <div class="login-logo-icon">
-        <i data-lucide="beer" style="color:white"></i>
+<div id="toast" class="hidden"></div>
+<div class="runner-wrap">
+
+  <!-- Header -->
+  <div class="runner-header">
+    <div class="runner-logo">
+      <div class="runner-logo-icon">
+        <i data-lucide="beer" style="color:white;width:16px;height:16px"></i>
       </div>
-      <div class="login-title">StockFest</div>
-      <div class="login-sub">Festival voorraadbeheer</div>
+      <div>
+        <div class="runner-event" id="event-name">—</div>
+        <div style="font-size:11px;color:var(--text3)" id="runner-name">—</div>
+      </div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="Auth.signOut()">
+      <i data-lucide="log-out"></i>
+    </button>
+  </div>
+
+  <div class="runner-body">
+
+    <!-- Step 1: Movement type -->
+    <div id="step-type">
+      <p class="runner-section-title">Wat wil je registreren?</p>
+      <div class="type-card" id="card-transfer" onclick="selectType('transfer')">
+        <div class="type-icon" style="background:rgba(139,92,246,.15)">
+          <i data-lucide="arrow-left-right" style="color:#a78bfa"></i>
+        </div>
+        <div>
+          <div style="font-weight:700;color:#f1f5f9;font-size:15px">Transfer</div>
+          <div style="font-size:12px;color:var(--text3)">Producten van locatie A naar B</div>
+        </div>
+      </div>
+      <div class="type-card" id="card-delivery" onclick="selectType('delivery')">
+        <div class="type-icon" style="background:rgba(16,185,129,.15)">
+          <i data-lucide="truck" style="color:#34d399"></i>
+        </div>
+        <div>
+          <div style="font-weight:700;color:#f1f5f9;font-size:15px">Levering</div>
+          <div style="font-size:12px;color:var(--text3)">Nieuwe voorraad van buiten</div>
+        </div>
+      </div>
     </div>
 
-    <div id="login-error" class="login-error" style="display:none"></div>
+    <!-- Step 2: Movement form -->
+    <div id="step-form" style="display:none">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
+        <button class="btn btn-ghost btn-sm" onclick="backToType()">
+          <i data-lucide="arrow-left"></i>
+        </button>
+        <span id="form-type-label" style="font-weight:700;font-size:15px;color:#f1f5f9">—</span>
+      </div>
 
-    <!-- Login form -->
-    <div id="form-login">
-      <div class="form-group">
-        <label>E-mailadres</label>
-        <input id="login-email" type="email" placeholder="naam@voorbeeld.nl" autocomplete="email">
+      <div id="from-field" class="runner-field" style="display:none">
+        <label>Van locatie</label>
+        <select id="sel-from">
+          <option value="">Selecteer locatie...</option>
+        </select>
       </div>
-      <div class="form-group">
-        <label>Wachtwoord</label>
-        <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password">
+
+      <div class="runner-field">
+        <label>Naar locatie</label>
+        <select id="sel-to">
+          <option value="">Selecteer locatie...</option>
+        </select>
       </div>
-      <button id="btn-login" class="btn btn-primary btn-full" style="margin-top:4px">
-        Inloggen
+
+      <div class="runner-field">
+        <label>Product</label>
+        <select id="sel-sku">
+          <option value="">Selecteer product...</option>
+        </select>
+      </div>
+
+      <div class="runner-field">
+        <label>Aantal</label>
+        <div class="stepper">
+          <button class="stepper-btn" style="width:48px;height:48px;font-size:22px" onclick="adjQty(-1)">−</button>
+          <input id="inp-qty" type="number" min="1" value="1"
+            style="width:100%;text-align:center;font-size:22px;font-weight:700;padding:10px 4px">
+          <button class="stepper-btn" style="width:48px;height:48px;font-size:22px" onclick="adjQty(1)">+</button>
+        </div>
+      </div>
+
+      <div class="runner-field">
+        <label>Notities (optioneel)</label>
+        <input id="inp-notes" type="text" placeholder="Opmerking...">
+      </div>
+
+      <button id="btn-submit" class="btn btn-success btn-full" style="padding:16px;font-size:16px;margin-top:8px">
+        <i data-lucide="check-circle"></i> Opslaan
       </button>
-      <div class="login-toggle">
-        Nog geen account? <a onclick="toggle('register')">Registreren</a>
+    </div>
+
+    <!-- Recent movements -->
+    <div id="recent-section" style="margin-top:28px">
+      <p class="runner-section-title">Jouw recente bewegingen</p>
+      <div id="recent-list">
+        <div style="color:var(--text3);font-size:13px">Laden...</div>
       </div>
     </div>
 
-    <!-- Register form -->
-    <div id="form-register" style="display:none">
-      <div class="form-group">
-        <label>Naam</label>
-        <input id="reg-name" type="text" placeholder="Jouw naam">
-      </div>
-      <div class="form-group">
-        <label>E-mailadres</label>
-        <input id="reg-email" type="email" placeholder="naam@voorbeeld.nl" autocomplete="email">
-      </div>
-      <div class="form-group">
-        <label>Wachtwoord</label>
-        <input id="reg-password" type="password" placeholder="Min. 6 tekens" autocomplete="new-password">
-      </div>
-      <button id="btn-register" class="btn btn-primary btn-full" style="margin-top:4px">
-        Account aanmaken
-      </button>
-      <div class="login-toggle">
-        Al een account? <a onclick="toggle('login')">Inloggen</a>
-      </div>
-      <div style="margin-top:14px;padding:10px 12px;background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.2);border-radius:8px;font-size:12px;color:#93c5fd">
-        Na registratie heeft je account standaard de rol <strong>runner</strong>. Vraag een admin je rol te wijzigen via Gebruikersbeheer.
-      </div>
-    </div>
   </div>
 </div>
 
-<!-- Scripts at bottom — NOT render-blocking -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="/js/supabase.js"></script>
+<script src="/js/db.js"></script>
 <script>
-  if (window.lucide) lucide.createIcons();
+let _profile, _event, _locations = [], _skus = [], _lsMap = {};
+let _selectedType = null;
 
-  // Check for existing session — redirect if already logged in
-  (async () => {
-    try {
-      const profile = await Auth.getProfile();
-      if (profile) {
-        location.href = profile.role === 'admin' ? '/admin' : '/runner';
-      }
-    } catch (e) {
-      // No session or DB not ready — stay on login page
-    }
-  })();
+document.addEventListener('DOMContentLoaded', async () => {
+  _profile = await Auth.require();   // any authenticated user
+  if (!_profile) return;
 
-  function setError(msg) {
-    const el = document.getElementById('login-error');
-    el.textContent = msg;
-    el.style.display = msg ? '' : 'none';
+  // Load active event
+  _event = await DB.getActiveEvent();
+  if (!_event) {
+    document.querySelector('.runner-wrap').innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;text-align:center">
+        <div>
+          <div style="font-size:48px;margin-bottom:12px">⚠️</div>
+          <h2 style="color:#f1f5f9;margin-bottom:8px">Geen actief evenement</h2>
+          <p style="color:var(--text3);font-size:14px">Vraag een admin een evenement te activeren.</p>
+        </div>
+      </div>`;
+    return;
   }
 
-  function toggle(mode) {
-    setError('');
-    document.getElementById('form-login').style.display    = mode === 'login'    ? '' : 'none';
-    document.getElementById('form-register').style.display = mode === 'register' ? '' : 'none';
+  document.getElementById('event-name').textContent = _event.name;
+  document.getElementById('runner-name').textContent = _profile.name || _profile.email || '';
+
+  // Load data
+  [_locations, _skus, _lsMap] = await Promise.all([
+    DB.getLocations(_event.id),
+    DB.getSkus(),
+    DB.getLocationSkuMap(_event.id),
+  ]);
+
+  populateSelects();
+  await loadRecent();
+
+  document.getElementById('btn-submit').addEventListener('click', handleSubmit);
+  lucide.createIcons();
+});
+
+function populateSelects() {
+  const locOptions = _locations.map(l => `<option value="${l.id}">${esc(l.name)}</option>`).join('');
+  const skuOptions = _skus.map(s => `<option value="${s.id}">${esc(s.name)} (${esc(s.unit)})</option>`).join('');
+
+  document.getElementById('sel-from').innerHTML = '<option value="">Selecteer locatie...</option>' + locOptions;
+  document.getElementById('sel-to').innerHTML   = '<option value="">Selecteer locatie...</option>' + locOptions;
+  document.getElementById('sel-sku').innerHTML  = '<option value="">Selecteer product...</option>' + skuOptions;
+}
+
+function selectType(type) {
+  _selectedType = type;
+  document.getElementById('step-type').style.display = 'none';
+  document.getElementById('step-form').style.display = '';
+  document.getElementById('form-type-label').textContent = type === 'transfer' ? 'Transfer' : 'Levering';
+  document.getElementById('from-field').style.display = type === 'transfer' ? '' : 'none';
+  document.getElementById('inp-qty').value = 1;
+  document.getElementById('inp-notes').value = '';
+  document.getElementById('sel-from').value = '';
+  document.getElementById('sel-to').value   = '';
+  document.getElementById('sel-sku').value  = '';
+  lucide.createIcons();
+}
+
+function backToType() {
+  _selectedType = null;
+  document.getElementById('step-form').style.display = 'none';
+  document.getElementById('step-type').style.display = '';
+}
+
+function adjQty(delta) {
+  const inp = document.getElementById('inp-qty');
+  inp.value = Math.max(1, (parseInt(inp.value) || 1) + delta);
+}
+
+async function handleSubmit() {
+  const fromId = document.getElementById('sel-from').value;
+  const toId   = document.getElementById('sel-to').value;
+  const skuId  = document.getElementById('sel-sku').value;
+  const qty    = parseInt(document.getElementById('inp-qty').value) || 0;
+  const notes  = document.getElementById('inp-notes').value.trim();
+
+  if (_selectedType === 'transfer' && !fromId) { showToast('Selecteer een vertreklocatie.', 'error'); return; }
+  if (!toId)   { showToast('Selecteer een bestemmingslocatie.', 'error'); return; }
+  if (!skuId)  { showToast('Selecteer een product.', 'error'); return; }
+  if (qty < 1) { showToast('Voer een geldig aantal in.', 'error'); return; }
+  if (_selectedType === 'transfer' && fromId === toId) { showToast('Van en naar locatie mogen niet hetzelfde zijn.', 'error'); return; }
+
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = 'Opslaan...';
+
+  const { error } = await DB.createMovement({
+    eventId:         _event.id,
+    fromLocationId:  _selectedType === 'transfer' ? fromId : null,
+    toLocationId:    toId,
+    skuId,
+    quantity:        qty,
+    type:            _selectedType,
+    notes,
+  });
+
+  btn.disabled = false;
+  btn.innerHTML = '<i data-lucide="check-circle"></i> Opslaan';
+  lucide.createIcons();
+
+  if (error) { showToast('Fout: ' + error.message, 'error'); return; }
+  showToast('Opgeslagen!', 'ok');
+  backToType();
+  await loadRecent();
+}
+
+async function loadRecent() {
+  const movements = await DB.getMyMovements(_event.id, 10);
+  const el = document.getElementById('recent-list');
+
+  if (!movements.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px">Nog geen bewegingen.</div>';
+    return;
   }
 
-  document.getElementById('btn-login').addEventListener('click', async () => {
-    const email    = document.getElementById('login-email').value.trim();
-    const password = document.getElementById('login-password').value;
-    if (!email || !password) { setError('Vul e-mail en wachtwoord in.'); return; }
+  el.innerHTML = movements.map(m => {
+    const isTransfer = m.type === 'transfer';
+    const from = m.from_loc?.name || 'Extern';
+    const to   = m.to_loc?.name   || '—';
+    const when = new Date(m.moved_at).toLocaleTimeString('nl-NL', { hour:'2-digit', minute:'2-digit' });
+    return `<div class="feed-item">
+      <div class="feed-dot ${m.type}"></div>
+      <div class="feed-main">
+        <div class="feed-title">${isTransfer ? `${esc(from)} → ${esc(to)}` : `Levering → ${esc(to)}`}</div>
+        <div class="feed-meta">${esc(m.sku?.name || '—')} · ${when}</div>
+      </div>
+      <div class="feed-qty">${m.quantity} ${esc(m.sku?.unit || '')}</div>
+    </div>`;
+  }).join('');
+}
 
-    const btn = document.getElementById('btn-login');
-    btn.disabled = true; btn.textContent = 'Bezig...';
-
-    const { error } = await Auth.signIn(email, password);
-    btn.disabled = false;
-    btn.textContent = 'Inloggen';
-
-    if (error) { setError(error.message); return; }
-
-    try {
-      const profile = await Auth.getProfile();
-      location.href = profile?.role === 'admin' ? '/admin' : '/runner';
-    } catch (e) {
-      location.href = '/runner';
-    }
-  });
-
-  document.getElementById('btn-register').addEventListener('click', async () => {
-    const name     = document.getElementById('reg-name').value.trim();
-    const email    = document.getElementById('reg-email').value.trim();
-    const password = document.getElementById('reg-password').value;
-    if (!name || !email || !password) { setError('Vul alle velden in.'); return; }
-    if (password.length < 6) { setError('Wachtwoord moet min. 6 tekens zijn.'); return; }
-
-    const btn = document.getElementById('btn-register');
-    btn.disabled = true; btn.textContent = 'Bezig...';
-
-    const { error } = await Auth.signUp(email, password, name);
-    btn.disabled = false;
-    btn.textContent = 'Account aanmaken';
-
-    if (error) { setError(error.message); return; }
-    setError('');
-    toggle('login');
-    document.getElementById('login-error').style.display = '';
-    document.getElementById('login-error').style.color = '#34d399';
-    document.getElementById('login-error').textContent = 'Account aangemaakt! Controleer je e-mail om te bevestigen.';
-  });
-
-  document.addEventListener('keydown', e => {
-    if (e.key !== 'Enter') return;
-    const loginVisible = document.getElementById('form-login').style.display !== 'none';
-    if (loginVisible) document.getElementById('btn-login').click();
-    else document.getElementById('btn-register').click();
-  });
+function esc(s) { return String(s).replace(/['"<>&]/g, c => ({'\'':'&#39;','"':'&quot;','<':'&lt;','>':'&gt;','&':'&amp;'}[c])); }
 </script>
 </body>
 </html>
