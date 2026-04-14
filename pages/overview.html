@@ -10,10 +10,18 @@
   <style>
     /* ── Stacked bar chart ─────────────────────────────── */
     .bar-chart-wrap {
-      padding: 0;
       margin-top: 24px;
       border-top: 1px solid var(--border);
       padding-top: 16px;
+    }
+    .chart-sections {
+      display: flex;
+      gap: 24px;
+      overflow-x: auto;
+    }
+    .chart-section {
+      flex: 1;
+      min-width: 0;
     }
     .bar-chart {
       display: flex;
@@ -69,6 +77,20 @@
       color: var(--text);
       margin-bottom: 3px;
       text-align: center;
+    }
+    .bar-sold-label {
+      font-size: 7px;
+      font-weight: 700;
+      color: #fff;
+      text-align: center;
+      line-height: 1;
+      padding: 2px 0;
+      text-shadow: 0 1px 2px rgba(0,0,0,.4);
+      position: absolute;
+      bottom: 2px;
+      left: 0;
+      right: 0;
+      pointer-events: none;
     }
     .chart-legend {
       display: flex;
@@ -275,12 +297,14 @@
             const remainH = totalH - soldH;
             const shortName = e.sku.name.length > 10 ? e.sku.name.substring(0, 9) + '...' : e.sku.name;
 
+            const soldLabel = sold > 0 && soldH >= 14 ? `<div class="bar-sold-label">${sold}</div>` : '';
+
             return `
               <div class="bar-col">
                 <div class="bar-value">${Math.round(e.current)}</div>
                 <div class="bar-stack" style="height:${Math.max(totalH, 2)}px">
                   <div class="bar-segment bar-seg-stock" style="height:${remainH}px"></div>
-                  <div class="bar-segment bar-seg-sold" style="height:${soldH}px"></div>
+                  <div class="bar-segment bar-seg-sold" style="height:${soldH}px; position:relative;">${soldLabel}</div>
                 </div>
                 <div class="bar-label">${esc(shortName)}</div>
               </div>`;
