@@ -43,42 +43,15 @@ const Auth = {
     const { data: { user } } = await sb.auth.getUser();
     if (!user) return null;
     const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
-    return data || null;
+    // If no profile row yet, return a minimal object so pages don't redirect to login
+    return data || { id: user.id, email: user.email, name: '' };
   },
 
-  // If the trigger failed during signup the profile row won't exist yet.
-  // This creates it on the fly so the user isn't stuck in a redirect loop.
-  async ensureProfile(user) {
-    const sb = getSB();
-    await sb.from('profiles').upsert({
-      id:    user.id,
-      email: user.email,
-      name:  user.user_metadata?.name || '',
-      role:  'runner',
-    }, { onConflict: 'id' });
-    const { data } = await sb.from('profiles').select('*').eq('id', user.id).maybeSingle();
-    return data || null;
-  },
-
-  // Require auth + optional role. Redirects if not met.
-  async require(role = null) {
+  // Require authentication. Redirects to login if no session.
+  async require() {
     const session = await Auth.getSession();
     if (!session) { location.href = '/'; return null; }
-
-    let profile = await Auth.getProfile();
-
-    // Profile missing (trigger failed at signup) — create it now
-    if (!profile) {
-      const { data: { user } } = await getSB().auth.getUser();
-      if (user) profile = await Auth.ensureProfile(user);
-    }
-
-    if (!profile) { location.href = '/'; return null; }
-    if (role && profile.role !== role) {
-      location.href = profile.role === 'runner' ? '/runner' : '/admin';
-      return null;
-    }
-    return profile;
+    return await Auth.getProfile();
   },
 
   // Working event context (stored in localStorage)

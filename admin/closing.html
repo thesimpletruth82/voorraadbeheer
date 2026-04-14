@@ -38,7 +38,7 @@ let _profile, _locations = [], _skus = [], _lsMap = {}, _counts = {}, _stock = {
 const eventId = Auth.getEventId();
 
 document.addEventListener('DOMContentLoaded', async () => {
-  _profile = await Auth.require('admin');
+  _profile = await Auth.require();
   if (!_profile) return;
   renderAdminNav('closing', _profile);
   if (!eventId) { showNoEvent(); lucide.createIcons(); return; }

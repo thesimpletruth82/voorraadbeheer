@@ -52,7 +52,7 @@ let _chart = null, _refreshTimer = null;
 const eventId = Auth.getEventId();
 
 document.addEventListener('DOMContentLoaded', async () => {
-  _profile = await Auth.require('admin');
+  _profile = await Auth.require();
   if (!_profile) return;
   renderAdminNav('overview', _profile);
   if (!eventId) { showNoEvent(); lucide.createIcons(); return; }

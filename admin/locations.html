@@ -52,7 +52,7 @@ let _profile, _locations = [], _skus = [], _lsMap = {};
 const eventId = Auth.getEventId();
 
 document.addEventListener('DOMContentLoaded', async () => {
-  _profile = await Auth.require('admin');
+  _profile = await Auth.require();
   if (!_profile) return;
   renderAdminNav('locations', _profile);
 
