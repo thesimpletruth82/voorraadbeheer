@@ -539,6 +539,113 @@ tbody td strong { color: var(--text); }
 
 .feed-dot.sale { background: var(--amber); box-shadow: 0 0 6px rgba(245,158,11,.5); }
 
+/* ── Stock bar chart (CSS) ───────────────────────────────── */
+.stock-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.stock-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stock-bar-label {
+  width: 130px;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-bar-wrap {
+  flex: 1;
+  height: 26px;
+  background: rgba(255,255,255,.04);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  min-width: 0;
+}
+
+.stock-bar-total {
+  height: 100%;
+  background: rgba(16,185,129,.35);
+  border-radius: 6px;
+  position: relative;
+  min-width: 2px;
+  transition: width .3s ease;
+}
+
+.stock-bar-used {
+  position: absolute;
+  top: 0; right: 0;
+  height: 100%;
+  background: rgba(239,68,68,.5);
+  border-radius: 0 6px 6px 0;
+  transition: width .3s ease;
+}
+
+.stock-bar-meta {
+  width: 140px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.stock-bar-qty {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.stock-bar-burn {
+  font-size: 10px;
+  color: var(--text3);
+  white-space: nowrap;
+}
+
+.stock-bar-timeleft {
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.time-ok      { color: var(--green); }
+.time-warn    { color: var(--amber); }
+.time-crit    { color: var(--red); }
+
+.chart-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  padding: 10px 0 4px;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+}
+
+.chart-section-label:first-child {
+  border-top: none;
+  margin-top: 0;
+  padding-top: 0;
+}
+
+@media (max-width: 600px) {
+  .stock-bar-label { width: 90px; font-size: 11px; }
+  .stock-bar-meta { width: 100px; }
+  .stock-bar-burn { display: none; }
+}
+
 /* ── Empty state ─────────────────────────────────────────── */
 .empty-state {
   text-align: center;

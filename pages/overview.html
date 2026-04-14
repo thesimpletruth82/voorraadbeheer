@@ -15,7 +15,7 @@
       <div class="page-header flex justify-between items-center">
         <div>
           <h1><span class="live-dot"></span> Live Overview</h1>
-          <p>Real-time stock levels across all locations.</p>
+          <p>Real-time stock levels, burn rate, and time remaining across all locations.</p>
         </div>
       </div>
       <div class="page-body">
@@ -29,8 +29,8 @@
           <!-- Stats -->
           <div class="stats-row" id="stats"></div>
 
-          <!-- Stock tables per location -->
-          <div id="stockTables"></div>
+          <!-- Bar charts per location -->
+          <div id="charts"></div>
 
           <!-- Movement feed -->
           <div class="card mt-4">
@@ -61,31 +61,36 @@
     async function init() {
       await refresh();
       setupRealtime();
-      // Auto-refresh every 30s as fallback
       setInterval(refresh, 30000);
     }
 
     async function refresh() {
-      const [locations, skus, stock, movements] = await Promise.all([
+      const [locations, skus, breakdown, movements] = await Promise.all([
         DB.getLocations(eventId),
         DB.getSkus(),
-        DB.computeCurrentStock(eventId),
-        DB.getMovements(eventId, 20),
+        DB.getStockBreakdown(eventId),
+        DB.getMovements(eventId, 30),
       ]);
 
-      renderStats(locations, skus, stock, movements);
-      renderStockTables(locations, skus, stock);
+      renderStats(locations, skus, breakdown, movements);
+      renderCharts(locations, skus, breakdown);
       renderFeed(movements);
     }
 
-    function renderStats(locations, skus, stock, movements) {
-      let lowCount = 0;
+    function renderStats(locations, skus, breakdown, movements) {
+      let lowCount = 0, outCount = 0;
       for (const loc of locations) {
+        const locData = breakdown[loc.id] || {};
         for (const sku of skus) {
-          const qty = stock[loc.id]?.[sku.id] || 0;
-          if (qty > 0 && qty < LOW_THRESHOLD) lowCount++;
+          const d = locData[sku.id];
+          if (!d) continue;
+          if (d.current <= 0) outCount++;
+          else if (d.current < LOW_THRESHOLD) lowCount++;
         }
       }
+
+      // Total sales count
+      const salesCount = movements.filter(m => m.type === 'sale').length;
 
       document.getElementById('stats').innerHTML = `
         <div class="stat-card">
@@ -94,39 +99,58 @@
           <div class="stat-value">${locations.length}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon purple"><i data-lucide="package"></i></div>
-          <div class="stat-label">Products</div>
-          <div class="stat-value">${skus.length}</div>
+          <div class="stat-icon purple"><i data-lucide="shopping-cart"></i></div>
+          <div class="stat-label">Recent Sales</div>
+          <div class="stat-value">${salesCount}</div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon green"><i data-lucide="arrow-right-left"></i></div>
-          <div class="stat-label">Movements</div>
-          <div class="stat-value">${movements.length}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-icon ${lowCount > 0 ? 'red' : 'amber'}"><i data-lucide="alert-triangle"></i></div>
+          <div class="stat-icon ${lowCount > 0 ? 'amber' : 'green'}"><i data-lucide="alert-triangle"></i></div>
           <div class="stat-label">Low Stock</div>
           <div class="stat-value">${lowCount}</div>
           <div class="stat-sub">Below ${LOW_THRESHOLD} units</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon ${outCount > 0 ? 'red' : 'green'}"><i data-lucide="x-circle"></i></div>
+          <div class="stat-label">Out of Stock</div>
+          <div class="stat-value">${outCount}</div>
         </div>`;
       lucide.createIcons();
     }
 
-    function renderStockTables(locations, skus, stock) {
-      const $tables = document.getElementById('stockTables');
+    function formatHours(h) {
+      if (h === null) return '';
+      if (h < 1) return Math.round(h * 60) + 'min';
+      if (h < 24) return h.toFixed(1) + 'h';
+      return Math.round(h / 24) + 'd';
+    }
+
+    function timeClass(h) {
+      if (h === null) return '';
+      if (h < 1) return 'time-crit';
+      if (h < 3) return 'time-warn';
+      return 'time-ok';
+    }
+
+    function renderCharts(locations, skus, breakdown) {
+      const $charts = document.getElementById('charts');
 
       if (!locations.length) {
-        $tables.innerHTML = '<div class="empty-state"><i data-lucide="map-pin"></i><h3>No locations</h3><p>Add locations in <a href="/pages/setup-locations.html">Setup</a>.</p></div>';
+        $charts.innerHTML = '<div class="empty-state"><i data-lucide="map-pin"></i><h3>No locations</h3><p>Add locations in <a href="/pages/setup-locations.html">Setup</a>.</p></div>';
         lucide.createIcons();
         return;
       }
 
-      $tables.innerHTML = locations.map(loc => {
-        const locStock = stock[loc.id] || {};
-        // Only show SKUs that have stock or an opening count
-        const relevantSkus = skus.filter(s => (locStock[s.id] || 0) !== 0);
+      // Build SKU lookup
+      const skuMap = {};
+      skus.forEach(s => skuMap[s.id] = s);
 
-        if (!relevantSkus.length) {
+      $charts.innerHTML = locations.map(loc => {
+        const locData = breakdown[loc.id] || {};
+        const entries = Object.entries(locData)
+          .map(([skuId, d]) => ({ sku: skuMap[skuId], ...d }))
+          .filter(e => e.sku && e.totalSupply > 0);
+
+        if (!entries.length) {
           return `
             <div class="card" style="margin-bottom:16px;">
               <div class="card-title"><i data-lucide="map-pin"></i> ${esc(loc.name)}</div>
@@ -134,29 +158,64 @@
             </div>`;
         }
 
-        const rows = relevantSkus.map(s => {
-          const qty = locStock[s.id] || 0;
-          let cls = 'var-zero', status = '';
-          if (qty <= 0) { cls = 'var-neg'; status = '<span class="badge badge-red">Out</span>'; }
-          else if (qty < LOW_THRESHOLD) { cls = 'var-neg'; status = '<span class="badge badge-amber">Low</span>'; }
-          else { cls = 'var-pos'; status = '<span class="badge badge-green">OK</span>'; }
+        // Split liters from non-liters
+        const nonLiters = entries.filter(e => e.sku.unit !== 'liters');
+        const liters = entries.filter(e => e.sku.unit === 'liters');
 
-          return `<tr>
-            <td><strong>${esc(s.name)}</strong></td>
-            <td class="right"><span class="${cls}">${qty}</span> <span class="text-xs text-muted">${esc(s.unit)}</span></td>
-            <td class="right">${status}</td>
-          </tr>`;
-        }).join('');
+        // Find max supply for scaling bars
+        const allSupply = entries.map(e => e.totalSupply);
+        const maxSupply = Math.max(...allSupply, 1);
+
+        function renderBars(items) {
+          return items.map(e => {
+            const totalPct = Math.max((e.totalSupply / maxSupply) * 100, 2);
+            const usedPct = e.totalSupply > 0 ? (e.used / e.totalSupply) * 100 : 0;
+            const burnStr = e.burnPerHour > 0 ? e.burnPerHour.toFixed(1) + '/hr' : '—';
+            const timeStr = formatHours(e.hoursLeft);
+            const timeCls = timeClass(e.hoursLeft);
+
+            let qtyClass = '';
+            if (e.current <= 0) qtyClass = 'time-crit';
+            else if (e.current < LOW_THRESHOLD) qtyClass = 'time-warn';
+
+            return `
+              <div class="stock-bar-row">
+                <div class="stock-bar-label">${esc(e.sku.name)}</div>
+                <div class="stock-bar-wrap">
+                  <div class="stock-bar-total" style="width:${totalPct}%">
+                    <div class="stock-bar-used" style="width:${usedPct}%"></div>
+                  </div>
+                </div>
+                <div class="stock-bar-meta">
+                  <div class="stock-bar-qty ${qtyClass}">${Math.round(e.current)} <span class="text-xs text-muted">${esc(e.sku.unit)}</span></div>
+                  <div class="stock-bar-burn">${burnStr}</div>
+                  ${timeStr ? `<div class="stock-bar-timeleft ${timeCls}">${timeStr} left</div>` : ''}
+                </div>
+              </div>`;
+          }).join('');
+        }
+
+        let chartHTML = '<div class="stock-chart">';
+
+        if (nonLiters.length && liters.length) {
+          // Both sections
+          chartHTML += `<div class="chart-section-label">Units</div>`;
+          chartHTML += renderBars(nonLiters);
+          chartHTML += `<div class="chart-section-label">Liters</div>`;
+          chartHTML += renderBars(liters);
+        } else if (liters.length) {
+          chartHTML += `<div class="chart-section-label">Liters</div>`;
+          chartHTML += renderBars(liters);
+        } else {
+          chartHTML += renderBars(nonLiters);
+        }
+
+        chartHTML += '</div>';
 
         return `
           <div class="card" style="margin-bottom:16px;">
             <div class="card-title"><i data-lucide="map-pin"></i> ${esc(loc.name)}</div>
-            <div class="table-wrap">
-              <table>
-                <thead><tr><th>Product</th><th class="right">Qty</th><th class="right">Status</th></tr></thead>
-                <tbody>${rows}</tbody>
-              </table>
-            </div>
+            ${chartHTML}
           </div>`;
       }).join('');
       lucide.createIcons();
@@ -184,7 +243,7 @@
               <div class="feed-title">${esc(skuName)}</div>
               <div class="feed-meta">${esc(desc)} · ${time}</div>
             </div>
-            <div class="feed-qty">${m.quantity}</div>
+            <div class="feed-qty">${m.type === 'sale' ? '−' : ''}${m.quantity}</div>
           </div>`;
       }).join('');
     }

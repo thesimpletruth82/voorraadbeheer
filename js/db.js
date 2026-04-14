@@ -156,6 +156,86 @@ const DB = {
     return stock;
   },
 
+  // ── Stock Breakdown (for charts + burn rate) ───────────
+  // Returns { locationId: { skuId: { totalSupply, used, current, burnPerHour, hoursLeft } } }
+  async getStockBreakdown(eventId) {
+    const [openingMap, rawMovements] = await Promise.all([
+      DB.getCountMap(eventId, 'opening'),
+      (async () => {
+        const { data } = await sb().from('movements').select('*').eq('event_id', eventId).order('moved_at').limit(5000);
+        return data || [];
+      })(),
+    ]);
+
+    // Find the earliest sale/movement timestamp for burn rate window
+    const firstSaleTime = {};  // { locId_skuId: Date }
+    const result = {};
+
+    // Pass 1: build totals
+    const locSkuData = {}; // locId -> skuId -> { opening, delivIn, transIn, transOut, salesOut }
+    const ensure = (locId, skuId) => {
+      if (!locSkuData[locId]) locSkuData[locId] = {};
+      if (!locSkuData[locId][skuId]) locSkuData[locId][skuId] = { opening: 0, delivIn: 0, transIn: 0, transOut: 0, salesOut: 0 };
+    };
+
+    // Openings
+    for (const [locId, skuMap] of Object.entries(openingMap)) {
+      for (const [skuId, qty] of Object.entries(skuMap)) {
+        ensure(locId, skuId);
+        locSkuData[locId][skuId].opening = qty;
+      }
+    }
+
+    // Movements
+    for (const m of rawMovements) {
+      const qty = Number(m.quantity);
+      if (m.type === 'delivery' && m.to_location_id) {
+        ensure(m.to_location_id, m.sku_id);
+        locSkuData[m.to_location_id][m.sku_id].delivIn += qty;
+      }
+      if (m.type === 'transfer') {
+        if (m.from_location_id) {
+          ensure(m.from_location_id, m.sku_id);
+          locSkuData[m.from_location_id][m.sku_id].transOut += qty;
+        }
+        if (m.to_location_id) {
+          ensure(m.to_location_id, m.sku_id);
+          locSkuData[m.to_location_id][m.sku_id].transIn += qty;
+        }
+      }
+      if (m.type === 'sale' && m.from_location_id) {
+        ensure(m.from_location_id, m.sku_id);
+        locSkuData[m.from_location_id][m.sku_id].salesOut += qty;
+        const key = m.from_location_id + '_' + m.sku_id;
+        if (!firstSaleTime[key]) firstSaleTime[key] = new Date(m.moved_at);
+      }
+    }
+
+    const now = new Date();
+    for (const [locId, skuMap] of Object.entries(locSkuData)) {
+      result[locId] = {};
+      for (const [skuId, d] of Object.entries(skuMap)) {
+        const totalSupply = d.opening + d.delivIn + d.transIn;
+        const used = d.salesOut + d.transOut;
+        const current = totalSupply - used;
+
+        // Burn rate: sales per hour since first sale
+        let burnPerHour = 0;
+        const key = locId + '_' + skuId;
+        if (d.salesOut > 0 && firstSaleTime[key]) {
+          const hoursElapsed = (now - firstSaleTime[key]) / 3600000;
+          if (hoursElapsed > 0.05) burnPerHour = d.salesOut / hoursElapsed; // at least 3 min
+        }
+
+        const hoursLeft = (burnPerHour > 0 && current > 0) ? current / burnPerHour : null;
+
+        result[locId][skuId] = { totalSupply, used, current, burnPerHour, hoursLeft };
+      }
+    }
+
+    return result;
+  },
+
   // ── Variance Data ──────────────────────────────────────
   // Returns array of { locationId, locationName, skuId, skuName, unit, opening, deliveriesIn, transfersOut, transfersIn, expected, actual, variance }
   async getVarianceData(eventId) {
