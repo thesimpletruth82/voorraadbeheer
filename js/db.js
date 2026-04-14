@@ -229,7 +229,10 @@ const DB = {
 
         const hoursLeft = (burnPerHour > 0 && current > 0) ? current / burnPerHour : null;
 
-        result[locId][skuId] = { totalSupply, used, current, burnPerHour, hoursLeft };
+        result[locId][skuId] = {
+          opening: d.opening, delivIn: d.delivIn, transIn: d.transIn, transOut: d.transOut, salesOut: d.salesOut,
+          totalSupply, used, current, burnPerHour, hoursLeft,
+        };
       }
     }
 
