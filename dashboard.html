@@ -42,9 +42,10 @@
       background: linear-gradient(135deg, #3b82f6, #8b5cf6);
       border-radius: 10px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 20px; flex-shrink: 0;
+      flex-shrink: 0;
       box-shadow: 0 0 16px rgba(59,130,246,.35);
     }
+    .dash-logo svg { width: 20px; height: 20px; }
     .dash-event-name { font-size: 17px; font-weight: 700; color: #f1f5f9; }
     .dash-event-date { font-size: 12px; color: #64748b; margin-top: 2px; }
     .live-dot {
@@ -53,6 +54,7 @@
       box-shadow: 0 0 6px rgba(16,185,129,.6);
     }
     .header-badge {
+      display: inline-flex; align-items: center; gap: 7px;
       background: rgba(255,255,255,.06);
       border: 1px solid rgba(255,255,255,.09);
       color: #cbd5e1; padding: 6px 14px; border-radius: 8px;
@@ -60,6 +62,7 @@
       transition: background .15s;
     }
     .header-badge:hover { background: rgba(255,255,255,.11); }
+    .header-badge svg { width: 13px; height: 13px; }
 
     /* ── Stat cards ── */
     .stats-row {
@@ -81,8 +84,9 @@
     .stat-icon  {
       width: 36px; height: 36px; border-radius: 9px;
       display: flex; align-items: center; justify-content: center;
-      font-size: 17px; margin-bottom: 12px;
+      margin-bottom: 12px;
     }
+    .stat-icon svg { width: 18px; height: 18px; }
 
     /* ── Section wrapper ── */
     .section {
@@ -90,15 +94,17 @@
       padding: 24px 28px 0;
     }
     .section-heading {
-      display: flex; align-items: baseline; gap: 12px;
+      display: flex; align-items: center; gap: 10px;
       padding-bottom: 16px;
       border-bottom: 1px solid rgba(255,255,255,.05);
       margin-bottom: 20px;
     }
     .section-heading h2 {
+      display: flex; align-items: center; gap: 8px;
       font-size: 13px; font-weight: 600;
       color: #94a3b8; text-transform: uppercase; letter-spacing: .07em;
     }
+    .section-heading h2 svg { width: 14px; height: 14px; }
     .section-heading p { font-size: 12px; color: #475569; }
 
     /* ── Chart grid ── */
@@ -132,12 +138,14 @@
       display: flex; align-items: center; gap: 16px;
     }
     .back-btn {
+      display: inline-flex; align-items: center; gap: 7px;
       background: rgba(255,255,255,.06);
       border: 1px solid rgba(255,255,255,.09);
       color: #94a3b8; padding: 7px 16px; border-radius: 8px;
       font-size: 13px; cursor: pointer; transition: background .15s;
     }
     .back-btn:hover { background: rgba(255,255,255,.11); color: #f1f5f9; }
+    .back-btn svg { width: 14px; height: 14px; }
     .detail-bar-title { font-size: 20px; font-weight: 700; color: #f1f5f9; }
 
     /* ── Legend ── */
@@ -153,9 +161,9 @@
     /* ── Bar table card ── */
     .bars-grid {
       max-width: 1600px; margin: 0 auto;
-      padding: 24px 28px 40px;
+      padding: 20px 28px 40px;
       display: grid; gap: 20px;
-      grid-template-columns: repeat(auto-fill, minmax(520px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
     }
     .bar-card {
       background: rgba(255,255,255,.03);
@@ -164,20 +172,26 @@
       animation: fade-in .5s ease both;
     }
     .bar-card-header {
-      padding: 14px 20px;
+      padding: 11px 16px;
       background: rgba(255,255,255,.04);
       border-bottom: 1px solid rgba(255,255,255,.06);
-      font-size: 15px; font-weight: 600; color: #f1f5f9;
+      font-size: 13px; font-weight: 600; color: #f1f5f9;
       display: flex; align-items: center; gap: 10px;
     }
     .bar-card-header-dot {
       width: 8px; height: 8px; border-radius: 50%; background: #3b82f6;
-      box-shadow: 0 0 6px rgba(59,130,246,.5);
+      box-shadow: 0 0 6px rgba(59,130,246,.5); flex-shrink: 0;
     }
-    .stock-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .bar-card-header-dot.amber {
+      background: #f59e0b;
+      box-shadow: 0 0 6px rgba(245,158,11,.5);
+    }
+
+    /* ── Stock table (compact) ── */
+    .stock-table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .stock-table thead tr { background: rgba(0,0,0,.25); }
     .stock-table thead th {
-      padding: 9px 14px; text-align: right;
+      padding: 6px 10px; text-align: right;
       font-size: 10px; font-weight: 600;
       color: #475569; text-transform: uppercase; letter-spacing: .06em;
     }
@@ -188,25 +202,29 @@
     }
     .stock-table tbody tr:last-child { border-bottom: none; }
     .stock-table tbody tr:hover { background: rgba(255,255,255,.03) !important; }
-    .stock-table td { padding: 10px 14px; text-align: right; }
+    .stock-table td { padding: 7px 10px; text-align: right; }
     .stock-table td:first-child { text-align: left; font-weight: 500; color: #e2e8f0; }
     .row-green  { background: rgba(16,185,129,.07); }
     .row-yellow { background: rgba(245,158,11,.07); }
     .row-red    { background: rgba(239,68,68,.07); }
 
-    /* ── Bottom spacing ── */
-    .pb-section { padding-bottom: 48px; }
+    /* ── End-count comparison panel ── */
+    .variance-pos  { color: #34d399; font-weight: 600; }
+    .variance-neg  { color: #f87171; font-weight: 600; }
+    .variance-zero { color: #475569; }
   </style>
 </head>
 <body>
 
 <div id="dashboard-section">
 
-  <!-- ── Header (always visible) ── -->
+  <!-- ── Header ── -->
   <div class="dash-header">
     <div class="dash-header-inner">
       <div style="display:flex;align-items:center;gap:14px">
-        <div class="dash-logo">🍺</div>
+        <div class="dash-logo">
+          <i data-lucide="beer" style="color:white"></i>
+        </div>
         <div>
           <div id="event-heading" class="dash-event-name">—</div>
           <div id="event-date" class="dash-event-date"></div>
@@ -217,13 +235,17 @@
           <span class="live-dot"></span>
           <span>Bijgewerkt: <strong id="last-updated" style="color:#cbd5e1">—</strong></span>
         </div>
-        <a href="/form" class="header-badge">📝 Formulier</a>
-        <a href="/admin" class="header-badge">⚙️ Beheer</a>
+        <a href="/form" class="header-badge">
+          <i data-lucide="clipboard-pen"></i> Formulier
+        </a>
+        <a href="/admin" class="header-badge">
+          <i data-lucide="settings"></i> Beheer
+        </a>
       </div>
     </div>
   </div>
 
-  <!-- ── Stat cards (updated per view) ── -->
+  <!-- ── Stat cards ── -->
   <div class="stats-row" id="stat-cards"></div>
 
   <!-- ══════════════════════════════════════════
@@ -231,19 +253,17 @@
   ══════════════════════════════════════════ -->
   <div id="main-view">
 
-    <!-- Totaal Terrein -->
     <div class="section" style="padding-top:28px">
       <div class="section-heading">
-        <h2>🏟️ Totaal Terrein</h2>
+        <h2><i data-lucide="layers"></i> Totaal Terrein</h2>
         <p>Alle bars gecombineerd</p>
       </div>
       <div id="totaal-chart-container"></div>
     </div>
 
-    <!-- Per bar (clickable) -->
     <div class="section" style="padding-top:28px;padding-bottom:48px">
       <div class="section-heading">
-        <h2>📊 Per bar</h2>
+        <h2><i data-lucide="bar-chart-2"></i> Per bar</h2>
         <p>Klik op een bar voor de gedetailleerde weergave</p>
       </div>
       <div class="charts-grid" id="bar-charts-container"></div>
@@ -252,22 +272,21 @@
   </div>
 
   <!-- ══════════════════════════════════════════
-       DETAIL VIEW (hidden by default)
+       DETAIL VIEW
   ══════════════════════════════════════════ -->
   <div id="detail-view" style="display:none">
 
-    <!-- Sub-navigation -->
     <div class="detail-subnav">
-      <button class="back-btn" onclick="location.hash=''">← Alle bars</button>
+      <button class="back-btn" onclick="location.hash=''">
+        <i data-lucide="arrow-left"></i> Alle bars
+      </button>
       <span class="detail-bar-title" id="detail-bar-name"></span>
     </div>
 
-    <!-- Bar chart -->
     <div class="section" style="padding-top:24px;padding-bottom:28px">
       <div id="detail-chart-container"></div>
     </div>
 
-    <!-- Legend -->
     <div class="legend-bar">
       <span style="font-weight:600;color:#94a3b8">Status rij:</span>
       <span style="display:flex;align-items:center;gap:6px">
@@ -282,7 +301,6 @@
       <span style="margin-left:auto;font-size:11px">30-min blokken · vernieuwd elke 30 sec</span>
     </div>
 
-    <!-- Stock table -->
     <div class="bars-grid" id="detail-table-container"></div>
 
   </div>
@@ -291,6 +309,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/js/config.js"></script>
 <script src="/js/auth.js"></script>

@@ -1,3 +1,5 @@
+function renderIcons() { if (window.lucide) lucide.createIcons(); }
+
 let fState = {
   event: null,
   bars: [],
@@ -8,12 +10,12 @@ let fState = {
 };
 
 const ENTRY_TYPES = [
-  { id: 'initial_count', label: 'Begintelling', icon: '📦', color: 'bg-blue-100 text-blue-800', description: 'Openingstelling container' },
-  { id: 'tap_out', label: 'Uitgifte', icon: '🍺', color: 'bg-orange-100 text-orange-800', description: 'Producten uit container gehaald' },
-  { id: 'delivery', label: 'Levering', icon: '🚚', color: 'bg-green-100 text-green-800', description: 'Nieuwe levering ontvangen' },
-  { id: 'transfer_out', label: 'Transfer', icon: '↔️', color: 'bg-purple-100 text-purple-800', description: 'Naar andere bar sturen' },
-  { id: 'beer_tank_level', label: 'Biertank', icon: '🛢️', color: 'bg-amber-100 text-amber-800', description: 'Huidig niveau biertank' },
-  { id: 'end_count', label: 'Eindtelling', icon: '🏁', color: 'bg-gray-100 text-gray-800', description: 'Slottelling container' },
+  { id: 'initial_count',  label: 'Begintelling', icon: '<i data-lucide="package"          style="width:20px;height:20px"></i>', color: 'bg-blue-100 text-blue-800',   description: 'Openingstelling container' },
+  { id: 'tap_out',        label: 'Uitgifte',     icon: '<i data-lucide="trending-down"    style="width:20px;height:20px"></i>', color: 'bg-orange-100 text-orange-800', description: 'Producten uit container gehaald' },
+  { id: 'delivery',       label: 'Levering',     icon: '<i data-lucide="truck"            style="width:20px;height:20px"></i>', color: 'bg-green-100 text-green-800',  description: 'Nieuwe levering ontvangen' },
+  { id: 'transfer_out',   label: 'Transfer',     icon: '<i data-lucide="arrow-left-right" style="width:20px;height:20px"></i>', color: 'bg-purple-100 text-purple-800', description: 'Naar andere bar sturen' },
+  { id: 'beer_tank_level',label: 'Biertank',     icon: '<i data-lucide="gauge"            style="width:20px;height:20px"></i>', color: 'bg-amber-100 text-amber-800',  description: 'Huidig niveau biertank' },
+  { id: 'end_count',      label: 'Eindtelling',  icon: '<i data-lucide="flag"             style="width:20px;height:20px"></i>', color: 'bg-gray-100 text-gray-800',    description: 'Slottelling container' },
 ];
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -65,6 +67,7 @@ async function loadEventData() {
 
   document.getElementById('event-title').textContent = fState.event?.name || '';
   renderBarSelection();
+  renderIcons();
 }
 
 function renderBarSelection() {
@@ -94,20 +97,24 @@ function renderEntryTypeButtons() {
     <button onclick="selectEntryType('${t.id}')"
       class="type-btn flex items-center gap-3 w-full py-3 px-4 rounded-xl border-2 border-gray-200
              font-medium ${t.color} active:scale-95 transition-transform">
-      <span class="text-2xl">${t.icon}</span>
+      <div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;flex-shrink:0">
+        ${t.icon}
+      </div>
       <div class="text-left">
         <div class="font-semibold">${t.label}</div>
         <div class="text-xs opacity-75">${t.description}</div>
       </div>
     </button>
   `).join('');
+  renderIcons();
 }
 
 function selectEntryType(typeId) {
   fState.entryType = typeId;
   const type = ENTRY_TYPES.find(t => t.id === typeId);
-  document.getElementById('entry-type-label').textContent = `${type.icon} ${type.label}`;
+  document.getElementById('entry-type-label').innerHTML = `${type.icon} ${type.label}`;
   document.getElementById('entry-bar-label').textContent = fState.selectedBar.name;
+  renderIcons();
   renderEntryForm();
   showStep('step-entries');
 }

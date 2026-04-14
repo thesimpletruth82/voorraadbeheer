@@ -1,3 +1,5 @@
+function renderIcons() { if (window.lucide) lucide.createIcons(); }
+
 // ── State ──────────────────────────────────────────────────
 let state = {
   events: [],
@@ -204,12 +206,13 @@ function renderEventList() {
         ${ev.is_active ? '<span class="ml-2 text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full">Actief</span>' : ''}
       </div>
       <div class="flex gap-2">
-        ${!ev.is_active ? `<button onclick="setActiveEvent('${ev.id}')" class="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Activeer</button>` : ''}
-        <button onclick="selectEvent('${ev.id}')" class="text-xs bg-gray-200 px-3 py-1 rounded hover:bg-gray-300">Beheer</button>
-        <button onclick="deleteEvent('${ev.id}')" class="text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200">✕</button>
+        ${!ev.is_active ? `<button onclick="setActiveEvent('${ev.id}')" class="flex items-center gap-1 text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"><i data-lucide="zap" style="width:11px;height:11px"></i> Activeer</button>` : ''}
+        <button onclick="selectEvent('${ev.id}')" class="flex items-center gap-1 text-xs bg-gray-200 px-3 py-1 rounded hover:bg-gray-300"><i data-lucide="edit-2" style="width:11px;height:11px"></i> Beheer</button>
+        <button onclick="deleteEvent('${ev.id}')" class="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200"><i data-lucide="trash-2" style="width:11px;height:11px"></i></button>
       </div>
     </div>
   `).join('');
+  renderIcons();
 }
 
 function renderBars() {
@@ -223,12 +226,12 @@ function renderBars() {
     return;
   }
   el.innerHTML = state.bars.map(bar => `
-    <div class="border border-gray-200 rounded-lg p-4">
+    <div class="border border-gray-200 rounded-lg p-4" style="background:rgba(255,255,255,.03)">
       <div class="flex items-center justify-between mb-3">
         <h3 class="font-semibold text-gray-800">${bar.name}</h3>
         <div class="flex gap-2">
-          <button onclick="assignAllSkusToBar('${bar.id}')" class="text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300">Alles ✓</button>
-          <button onclick="deleteBar('${bar.id}')" class="text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200">✕</button>
+          <button onclick="assignAllSkusToBar('${bar.id}')" class="flex items-center gap-1 text-xs bg-gray-200 px-2 py-1 rounded hover:bg-gray-300"><i data-lucide="check-square" style="width:11px;height:11px"></i> Alles</button>
+          <button onclick="deleteBar('${bar.id}')" class="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200"><i data-lucide="trash-2" style="width:11px;height:11px"></i></button>
         </div>
       </div>
       <div class="grid grid-cols-2 gap-1">
@@ -242,6 +245,7 @@ function renderBars() {
       </div>
     </div>
   `).join('');
+  renderIcons();
 }
 
 function renderSkus() {
@@ -263,14 +267,22 @@ function renderSkus() {
         <tr class="border-b border-gray-100">
           <td class="py-2">${sku.name}</td>
           <td class="py-2 text-gray-500">${sku.unit}</td>
-          <td class="py-2">${sku.is_beer_tank ? `🍺 ${sku.tank_size_liters}L` : '—'}</td>
+          <td class="py-2 text-amber-700">
+            ${sku.is_beer_tank
+              ? `<span class="flex items-center gap-1"><i data-lucide="gauge" style="width:13px;height:13px"></i> ${sku.tank_size_liters}L</span>`
+              : '<span class="text-gray-500">—</span>'}
+          </td>
           <td class="py-2 text-right">
-            <button onclick="deleteSku('${sku.id}')" class="text-xs text-red-500 hover:text-red-700">✕</button>
+            <button onclick="deleteSku('${sku.id}')"
+              class="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 ml-auto">
+              <i data-lucide="trash-2" style="width:11px;height:11px"></i>
+            </button>
           </td>
         </tr>
       `).join('')}
     </tbody>
   </table>`;
+  renderIcons();
 }
 
 function formatDate(d) {

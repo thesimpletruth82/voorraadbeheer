@@ -10,6 +10,8 @@ let dState = {
 const _charts = {}; // key -> Chart instance
 let _currentBarId = null;
 
+function renderIcons() { if (window.lucide) lucide.createIcons(); }
+
 // ── Boot ───────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   const ok = await Auth.loadActiveEvent();
@@ -68,6 +70,7 @@ async function loadDashboard() {
     : '';
   document.getElementById('last-updated').textContent = new Date().toLocaleTimeString('nl-NL');
 
+  renderIcons(); // header badges & section headings
   renderCurrentView();
 }
 
@@ -136,25 +139,33 @@ function renderSummaryCards(barId) {
 
   el.innerHTML = `
     <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(59,130,246,.15)">🏪</div>
+      <div class="stat-icon" style="background:rgba(59,130,246,.15)">
+        <i data-lucide="store" style="width:18px;height:18px;color:#3b82f6"></i>
+      </div>
       <div class="stat-label">${barId ? 'Geselecteerde bar' : 'Actieve bars'}</div>
       <div class="stat-value">${barId ? 1 : bars.length}</div>
       <div class="stat-sub">${subtitle}</div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(139,92,246,.15)">📦</div>
+      <div class="stat-icon" style="background:rgba(139,92,246,.15)">
+        <i data-lucide="package" style="width:18px;height:18px;color:#8b5cf6"></i>
+      </div>
       <div class="stat-label">Producten</div>
       <div class="stat-value">${skus.length}</div>
       <div class="stat-sub">SKUs getrackt</div>
     </div>
     <div class="stat-card">
-      <div class="stat-icon" style="background:rgba(16,185,129,.15)">📋</div>
+      <div class="stat-icon" style="background:rgba(16,185,129,.15)">
+        <i data-lucide="clipboard-list" style="width:18px;height:18px;color:#10b981"></i>
+      </div>
       <div class="stat-label">Mutaties</div>
       <div class="stat-value">${totalMutations}</div>
       <div class="stat-sub">${barId ? 'voor deze bar' : 'ingevoerd totaal'}</div>
     </div>
     <div class="stat-card" style="border-color:${critical ? criticalColor + '44' : 'rgba(255,255,255,.07)'}">
-      <div class="stat-icon" style="background:rgba(239,68,68,.15)">⚠️</div>
+      <div class="stat-icon" style="background:rgba(239,68,68,.15)">
+        <i data-lucide="alert-triangle" style="width:18px;height:18px;color:#ef4444"></i>
+      </div>
       <div class="stat-label">Meest kritiek</div>
       <div class="stat-value" style="font-size:18px;color:${criticalColor}">
         ${critical ? critical.sku.name : '—'}
@@ -164,6 +175,7 @@ function renderSummaryCards(barId) {
       </div>
     </div>
   `;
+  renderIcons();
 }
 
 // ── Split chart HTML helper ────────────────────────────────
@@ -214,18 +226,19 @@ function calcSkuData(skus, barIds) {
 }
 
 // Builds (or rebuilds) the regular + beer charts for a given idPrefix
+// Beer chart uses slim=true → bars are 30 % narrower than regular charts
 function mountSplitCharts(idPrefix, regularSkus, beerSkus, barIds) {
   if (regularSkus.length) {
     const key = `${idPrefix}-reg`;
     if (_charts[key]) _charts[key].destroy();
     const { available, used } = calcSkuData(regularSkus, barIds);
-    _charts[key] = buildChart(`${idPrefix}-reg`, regularSkus, available, used);
+    _charts[key] = buildChart(`${idPrefix}-reg`, regularSkus, available, used, false);
   }
   if (beerSkus.length) {
     const key = `${idPrefix}-beer`;
     if (_charts[key]) _charts[key].destroy();
     const { available, used } = calcSkuData(beerSkus, barIds);
-    _charts[key] = buildChart(`${idPrefix}-beer`, beerSkus, available, used);
+    _charts[key] = buildChart(`${idPrefix}-beer`, beerSkus, available, used, true);
   }
 }
 
@@ -332,28 +345,77 @@ function renderDetailTable(bar) {
   const barSkuIds = dState.barSkus[bar.id] || [];
   const barSkus   = dState.skus.filter(s => barSkuIds.includes(s.id));
 
-  if (!barSkus.length) {
-    container.innerHTML = '';
-    return;
-  }
+  if (!barSkus.length) { container.innerHTML = ''; return; }
 
-  const rows = barSkus.map(sku => renderSkuRow(bar.id, sku)).join('');
+  const hasEndCount = dState.entries.some(x => x.bar_id === bar.id && x.entry_type === 'end_count');
+  const rows        = barSkus.map(sku => renderSkuRow(bar.id, sku)).join('');
 
-  container.innerHTML = `
-    <div class="bar-card" style="grid-column:1/-1">
+  const liveCard = `
+    <div class="bar-card"${hasEndCount ? '' : ' style="grid-column:1/-1"'}>
       <div class="bar-card-header">
-        <span class="bar-card-header-dot"></span>${bar.name} — Voorraadoverzicht
+        <span class="bar-card-header-dot"></span>${bar.name} — Live voorraad
       </div>
       <div style="overflow-x:auto">
         <table class="stock-table">
           <thead>
             <tr>
-              <th>Product</th>
-              <th>Start</th>
-              <th>Gebruikt</th>
-              <th>In container</th>
-              <th>Per uur</th>
-              <th>Leeg om</th>
+              <th>Product</th><th>Start</th><th>Gebruikt</th>
+              <th>In container</th><th>Per uur</th><th>Leeg om</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>`;
+
+  container.innerHTML = hasEndCount
+    ? liveCard + renderEndCountCard(bar, barSkus)
+    : liveCard;
+}
+
+function renderEndCountCard(bar, barSkus) {
+  const rows = barSkus.map(sku => {
+    const e       = dState.entries.filter(x => x.bar_id === bar.id && x.sku_id === sku.id);
+    const sum     = t => e.filter(x => x.entry_type === t).reduce((a, x) => a + Number(x.quantity), 0);
+    const initial = sum('initial_count');
+    const tapOut  = sum('tap_out');
+    const expected = initial + sum('delivery') + sum('transfer_in') - sum('transfer_out') - tapOut;
+    const hasEnd  = e.some(x => x.entry_type === 'end_count');
+    const endCount = sum('end_count');
+    const variance = hasEnd ? endCount - expected : null;
+
+    const varClass = variance === null ? 'variance-zero'
+      : variance > 0  ? 'variance-pos'
+      : variance < 0  ? 'variance-neg'
+      : 'variance-zero';
+    const varText  = variance === null  ? '—'
+      : variance > 0  ? `+${variance.toLocaleString('nl-NL')} ${sku.unit}`
+      : variance < 0  ? `${variance.toLocaleString('nl-NL')} ${sku.unit}`
+      : `0 ${sku.unit}`;
+
+    return `<tr>
+      <td style="text-align:left;font-weight:500;color:#e2e8f0">${sku.name}</td>
+      <td>${expected.toLocaleString('nl-NL')} ${sku.unit}</td>
+      <td style="font-weight:600;color:#f1f5f9">
+        ${hasEnd ? `${endCount.toLocaleString('nl-NL')} ${sku.unit}` : '—'}
+      </td>
+      <td class="${varClass}">${varText}</td>
+    </tr>`;
+  }).join('');
+
+  return `
+    <div class="bar-card">
+      <div class="bar-card-header">
+        <span class="bar-card-header-dot amber"></span>
+        Eindtelling
+        <span style="font-size:11px;color:#64748b;font-weight:400;margin-left:auto">verwacht vs geteld</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table class="stock-table">
+          <thead>
+            <tr>
+              <th style="text-align:left">Product</th>
+              <th>Verwacht</th><th>Geteld</th><th>Verschil</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
@@ -497,15 +559,19 @@ const _glowPlugin = {
 };
 
 // ── Chart builder ──────────────────────────────────────────
-function buildChart(canvasId, skus, availableArr, usedArr) {
+// slim=true → beer chart: bars are another 30 % narrower (max-thickness capped too)
+function buildChart(canvasId, skus, availableArr, usedArr, slim = false) {
   const canvas = document.getElementById(canvasId);
   if (!canvas) return null;
 
   const labels    = skus.map(s => s.name);
   const remaining = availableArr.map((a, i) => Math.max(0, a - usedArr[i]));
 
-  // Shared dataset style — 30% slimmer than Chart.js defaults (0.9 / 0.8)
-  const barOpts = { barPercentage: 0.63, categoryPercentage: 0.56 };
+  // Regular bars: 30% slimmer than Chart.js defaults (0.9 / 0.8)
+  // Beer (slim): another 30% narrower + hard cap so a single bar stays narrow
+  const barOpts = slim
+    ? { barPercentage: 0.44, categoryPercentage: 0.40, maxBarThickness: 48 }
+    : { barPercentage: 0.63, categoryPercentage: 0.56 };
 
   return new Chart(canvas.getContext('2d'), {
     type: 'bar',
