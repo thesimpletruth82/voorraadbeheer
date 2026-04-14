@@ -69,7 +69,7 @@
     .bar-row {
       display: flex;
       align-items: flex-end;
-      gap: 6px;
+      gap: 16px;
       height: 200px;
       position: relative;
       z-index: 1;
@@ -80,8 +80,8 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      flex: 0 0 40px;
-      width: 40px;
+      flex: 0 0 20px;
+      width: 20px;
     }
     .bar-stack {
       width: 100%;
@@ -117,27 +117,28 @@
       pointer-events: none;
     }
 
-    /* Label below bar */
+    /* Labels below bars */
+    .bar-labels {
+      display: flex;
+      gap: 16px;
+      margin-left: 30px;
+    }
+    .bar-label-col {
+      flex: 0 0 20px;
+      width: 20px;
+      height: 110px;
+      position: relative;
+    }
     .bar-label {
       font-size: 9px;
       color: var(--text3);
       white-space: nowrap;
       transform: rotate(-90deg);
-      transform-origin: top left;
+      transform-origin: center center;
       position: absolute;
-      top: 6px;
+      top: 50%;
       left: 50%;
-    }
-    .bar-labels {
-      display: flex;
-      gap: 6px;
-    }
-    .bar-label-col {
-      flex: 0 0 40px;
-      width: 40px;
-      height: 100px;
-      position: relative;
-      overflow: visible;
+      translate: -50% -50%;
     }
 
     /* Legend */
@@ -389,9 +390,7 @@
                 <div class="bar-row">${barsHTML}</div>
               </div>
             </div>
-            <div style="margin-left:30px;">
-              <div class="bar-labels">${labelsHTML}</div>
-            </div>`;
+            <div class="bar-labels">${labelsHTML}</div>`;
         }
 
         const unitNames = Object.keys(byUnit).sort();
