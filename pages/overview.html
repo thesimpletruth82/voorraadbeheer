@@ -182,6 +182,7 @@
 
         <div id="content" class="hidden">
           <div class="stats-row" id="stats"></div>
+          <div id="totals"></div>
           <div id="locationCards"></div>
 
           <div class="card mt-4">
@@ -227,7 +228,8 @@
         DB.getMovements(eventId, 30),
       ]);
       renderStats(locations, skus, breakdown, movements);
-      renderLocationCards(locations, skus, breakdown);
+      renderTotals(locations, skus, breakdown);
+      renderLocationCards(locations, skus, breakdown, movements);
       renderFeed(movements);
     }
 
@@ -288,8 +290,80 @@
       return b.toFixed(1) + '/h';
     }
 
+    // ── Event totals (all locations combined) ───────────
+    function renderTotals(locations, skus, breakdown) {
+      const $el = document.getElementById('totals');
+      if (!locations.length) { $el.innerHTML = ''; return; }
+
+      const skuMap = {};
+      skus.forEach(s => skuMap[s.id] = s);
+
+      // Aggregate across all locations
+      const agg = {}; // skuId -> combined data
+      for (const loc of locations) {
+        const ld = breakdown[loc.id] || {};
+        for (const [skuId, d] of Object.entries(ld)) {
+          if (!agg[skuId]) agg[skuId] = { opening: 0, delivIn: 0, transIn: 0, transOut: 0, salesOut: 0, totalSupply: 0, used: 0, current: 0, burnTotal: 0, burnRecent: 0, _burnTW: 0, _burnRW: 0 };
+          const a = agg[skuId];
+          a.opening += d.opening; a.delivIn += d.delivIn; a.transIn += d.transIn;
+          a.transOut += d.transOut; a.salesOut += d.salesOut;
+          a.totalSupply += d.totalSupply; a.used += d.used; a.current += d.current;
+          // Weight burn rates by salesOut for averaging
+          a._burnTW += d.burnTotal * d.salesOut;
+          a._burnRW += d.burnRecent * d.salesOut;
+        }
+      }
+
+      const entries = Object.entries(agg)
+        .map(([skuId, a]) => {
+          const sku = skuMap[skuId];
+          if (!sku || a.totalSupply <= 0) return null;
+          const burnTotal = a.salesOut > 0 ? a._burnTW / a.salesOut : 0;
+          const burnRecent = a.salesOut > 0 ? a._burnRW / a.salesOut : 0;
+          const activeBurn = burnRecent || burnTotal;
+          const hoursLeft = (activeBurn > 0 && a.current > 0) ? a.current / activeBurn : null;
+          return { sku, ...a, burnTotal, burnRecent, hoursLeft };
+        })
+        .filter(Boolean);
+
+      if (!entries.length) { $el.innerHTML = ''; return; }
+
+      const tableRows = entries.map(e => {
+        const stockStyle = e.current <= 0 ? ' class="var-neg"' : (e.current < LOW_THRESHOLD ? ' style="color:var(--amber);font-weight:600"' : '');
+        return `<tr>
+          <td><strong>${esc(e.sku.name)}</strong> <span class="text-xs text-muted">${esc(e.sku.unit)}</span></td>
+          <td class="right"><span${stockStyle}>${Math.round(e.current)}</span></td>
+          <td class="right">${e.salesOut || 0}</td>
+          <td class="right">${e.delivIn || 0}</td>
+          <td class="right">${e.transIn || 0}</td>
+          <td class="right">${e.transOut || 0}</td>
+          <td class="right">${fmtBurn(e.burnTotal)}</td>
+          <td class="right">${fmtBurn(e.burnRecent)}</td>
+          <td class="right"><span class="${timeCls(e.hoursLeft)}" style="font-weight:600">${fmtHours(e.hoursLeft)}</span></td>
+        </tr>`;
+      }).join('');
+
+      $el.innerHTML = `
+        <div class="card mb-6">
+          <div class="card-title"><i data-lucide="layers"></i> Event Totals — All Locations</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Product</th><th class="right">Stock</th><th class="right">Sold</th>
+                  <th class="right">Deliv.</th><th class="right">In</th><th class="right">Out</th>
+                  <th class="right">Burn/h</th><th class="right">3h Burn</th><th class="right">ETA</th>
+                </tr>
+              </thead>
+              <tbody>${tableRows}</tbody>
+            </table>
+          </div>
+        </div>`;
+      lucide.createIcons();
+    }
+
     // ── Location cards (table + chart) ─────────────────
-    function renderLocationCards(locations, skus, breakdown) {
+    function renderLocationCards(locations, skus, breakdown, movements) {
       const $el = document.getElementById('locationCards');
 
       if (!locations.length) {
@@ -307,6 +381,14 @@
           .map(([skuId, d]) => ({ sku: skuMap[skuId], ...d }))
           .filter(e => e.sku && (e.totalSupply > 0 || e.current !== 0));
 
+        // Per-location stats
+        const locSales = movements ? movements.filter(m => m.type === 'sale' && m.from_location_id === loc.id).length : 0;
+        let locLow = 0, locOut = 0;
+        for (const e of entries) {
+          if (e.current <= 0) locOut++;
+          else if (e.current < LOW_THRESHOLD) locLow++;
+        }
+
         if (!entries.length) {
           return `
             <div class="card" style="margin-bottom:16px;">
@@ -314,6 +396,25 @@
               <div class="text-muted text-sm" style="padding:4px 0;">No stock data yet.</div>
             </div>`;
         }
+
+        const locStatsHTML = `
+          <div class="stats-row" style="margin-bottom:16px;">
+            <div class="stat-card">
+              <div class="stat-icon purple"><i data-lucide="shopping-cart"></i></div>
+              <div class="stat-label">Recent Sales</div>
+              <div class="stat-value">${locSales}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon ${locLow > 0 ? 'amber' : 'green'}"><i data-lucide="alert-triangle"></i></div>
+              <div class="stat-label">Low Stock</div>
+              <div class="stat-value">${locLow}</div>
+            </div>
+            <div class="stat-card">
+              <div class="stat-icon ${locOut > 0 ? 'red' : 'green'}"><i data-lucide="x-circle"></i></div>
+              <div class="stat-label">Out of Stock</div>
+              <div class="stat-value">${locOut}</div>
+            </div>
+          </div>`;
 
         // ── Table ──────────────────────────────
         const tableRows = entries.map(e => {
@@ -419,27 +520,32 @@
         </div>`;
 
         return `
-          <div class="card" style="margin-bottom:16px;">
-            <div class="card-title"><i data-lucide="map-pin"></i> ${esc(loc.name)}</div>
-            <div class="table-wrap">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Product</th>
-                    <th class="right">Stock</th>
-                    <th class="right">Sold</th>
-                    <th class="right">Deliv.</th>
-                    <th class="right">In</th>
-                    <th class="right">Out</th>
-                    <th class="right">Burn/h</th>
-                    <th class="right">3h Burn</th>
-                    <th class="right">ETA</th>
-                  </tr>
-                </thead>
-                <tbody>${tableRows}</tbody>
-              </table>
+          <div style="margin-bottom:24px;">
+            <h3 style="font-size:16px; font-weight:700; color:#f1f5f9; margin-bottom:12px; display:flex; align-items:center; gap:8px;">
+              <i data-lucide="map-pin" style="width:16px;height:16px;color:var(--accent);"></i> ${esc(loc.name)}
+            </h3>
+            ${locStatsHTML}
+            <div class="card">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Product</th>
+                      <th class="right">Stock</th>
+                      <th class="right">Sold</th>
+                      <th class="right">Deliv.</th>
+                      <th class="right">In</th>
+                      <th class="right">Out</th>
+                      <th class="right">Burn/h</th>
+                      <th class="right">3h Burn</th>
+                      <th class="right">ETA</th>
+                    </tr>
+                  </thead>
+                  <tbody>${tableRows}</tbody>
+                </table>
+              </div>
+              <div class="bar-chart-wrap">${chartHTML}</div>
             </div>
-            <div class="bar-chart-wrap">${chartHTML}</div>
           </div>`;
       }).join('');
       lucide.createIcons();
