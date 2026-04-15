@@ -54,13 +54,17 @@
   <script>
     renderNav('locations');
 
-    const eventId = Ctx.id();
-    if (!eventId) {
-      document.getElementById('noEvent').classList.remove('hidden');
-    } else {
-      document.getElementById('content').classList.remove('hidden');
-      init();
-    }
+    let eventId;
+    (async () => {
+      eventId = await Ctx.ensure();
+      renderNav('locations');
+      if (!eventId) {
+        document.getElementById('noEvent').classList.remove('hidden');
+      } else {
+        document.getElementById('content').classList.remove('hidden');
+        init();
+      }
+    })();
 
     let currentLocNames = new Set();
 

@@ -82,13 +82,17 @@
   <script>
     renderNav('sales');
 
-    const eventId = Ctx.id();
-    if (!eventId) {
-      document.getElementById('noEvent').classList.remove('hidden');
-    } else {
-      document.getElementById('content').classList.remove('hidden');
-      init();
-    }
+    let eventId;
+    (async () => {
+      eventId = await Ctx.ensure();
+      renderNav('sales');
+      if (!eventId) {
+        document.getElementById('noEvent').classList.remove('hidden');
+      } else {
+        document.getElementById('content').classList.remove('hidden');
+        init();
+      }
+    })();
 
     let locations = [], skus = [], tapCounts = {}, expectedStock = {};
     const LAST_LOC_KEY = 'sf_sales_loc';

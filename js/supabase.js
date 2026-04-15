@@ -22,6 +22,16 @@ const Ctx = {
     localStorage.removeItem('sf_eid');
     localStorage.removeItem('sf_ename');
     localStorage.removeItem('sf_estatus');
+  },
+  // Auto-detect: if nothing in localStorage, fetch the active event from DB
+  async ensure() {
+    if (Ctx.id()) return Ctx.id();
+    const { data } = await sb().from('events').select('*').eq('status', 'active').limit(1).maybeSingle();
+    if (data) {
+      Ctx.set(data.id, data.name, data.status);
+      return data.id;
+    }
+    return null;
   }
 };
 

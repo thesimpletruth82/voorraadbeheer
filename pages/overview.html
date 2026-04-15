@@ -199,13 +199,17 @@
   <script>
     renderNav('overview');
 
-    const eventId = Ctx.id();
-    if (!eventId) {
-      document.getElementById('noEvent').classList.remove('hidden');
-    } else {
-      document.getElementById('content').classList.remove('hidden');
-      init();
-    }
+    let eventId;
+    (async () => {
+      eventId = await Ctx.ensure();
+      renderNav('overview');
+      if (!eventId) {
+        document.getElementById('noEvent').classList.remove('hidden');
+      } else {
+        document.getElementById('content').classList.remove('hidden');
+        init();
+      }
+    })();
 
     const LOW_THRESHOLD = 10;
 
