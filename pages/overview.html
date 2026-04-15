@@ -329,7 +329,8 @@
             <td class="right">${e.delivIn || 0}</td>
             <td class="right">${e.transIn || 0}</td>
             <td class="right">${e.transOut || 0}</td>
-            <td class="right">${fmtBurn(e.burnPerHour)}</td>
+            <td class="right">${fmtBurn(e.burnTotal)}</td>
+            <td class="right">${fmtBurn(e.burnRecent)}</td>
             <td class="right"><span class="${timeCls(e.hoursLeft)}" style="font-weight:600">${fmtHours(e.hoursLeft)}</span></td>
           </tr>`;
         }).join('');
@@ -430,7 +431,8 @@
                     <th class="right">Deliv.</th>
                     <th class="right">In</th>
                     <th class="right">Out</th>
-                    <th class="right">Burn</th>
+                    <th class="right">Burn/h</th>
+                    <th class="right">3h Burn</th>
                     <th class="right">ETA</th>
                   </tr>
                 </thead>

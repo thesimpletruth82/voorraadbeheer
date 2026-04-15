@@ -171,12 +171,13 @@ const DB = {
       })(),
     ]);
 
-    // Find the earliest sale/movement timestamp for burn rate window
     const firstSaleTime = {};  // { locId_skuId: Date }
+    const salesLast3h = {};    // { locId_skuId: number }
     const result = {};
+    const now = new Date();
+    const threeHoursAgo = new Date(now - 3 * 3600000);
 
-    // Pass 1: build totals
-    const locSkuData = {}; // locId -> skuId -> { opening, delivIn, transIn, transOut, salesOut }
+    const locSkuData = {};
     const ensure = (locId, skuId) => {
       if (!locSkuData[locId]) locSkuData[locId] = {};
       if (!locSkuData[locId][skuId]) locSkuData[locId][skuId] = { opening: 0, delivIn: 0, transIn: 0, transOut: 0, salesOut: 0 };
@@ -212,30 +213,44 @@ const DB = {
         locSkuData[m.from_location_id][m.sku_id].salesOut += qty;
         const key = m.from_location_id + '_' + m.sku_id;
         if (!firstSaleTime[key]) firstSaleTime[key] = new Date(m.moved_at);
+        // Track last 3h sales
+        if (new Date(m.moved_at) >= threeHoursAgo) {
+          salesLast3h[key] = (salesLast3h[key] || 0) + qty;
+        }
       }
     }
 
-    const now = new Date();
     for (const [locId, skuMap] of Object.entries(locSkuData)) {
       result[locId] = {};
       for (const [skuId, d] of Object.entries(skuMap)) {
         const totalSupply = d.opening + d.delivIn + d.transIn;
         const used = d.salesOut + d.transOut;
         const current = totalSupply - used;
-
-        // Burn rate: sales per hour since first sale
-        let burnPerHour = 0;
         const key = locId + '_' + skuId;
+
+        // Burn rate since start: total sales / hours since first sale
+        let burnTotal = 0;
         if (d.salesOut > 0 && firstSaleTime[key]) {
           const hoursElapsed = (now - firstSaleTime[key]) / 3600000;
-          if (hoursElapsed > 0.05) burnPerHour = d.salesOut / hoursElapsed; // at least 3 min
+          if (hoursElapsed > 0.05) burnTotal = d.salesOut / hoursElapsed;
         }
 
-        const hoursLeft = (burnPerHour > 0 && current > 0) ? current / burnPerHour : null;
+        // Burn rate last 3h: sales in last 3h / min(3, hours since first sale)
+        let burnRecent = 0;
+        const recent = salesLast3h[key] || 0;
+        if (recent > 0 && firstSaleTime[key]) {
+          const hoursSinceFirst = (now - firstSaleTime[key]) / 3600000;
+          const window = Math.min(3, hoursSinceFirst);
+          if (window > 0.05) burnRecent = recent / window;
+        }
+
+        // ETA based on recent burn rate (more useful), fall back to total
+        const activeBurn = burnRecent || burnTotal;
+        const hoursLeft = (activeBurn > 0 && current > 0) ? current / activeBurn : null;
 
         result[locId][skuId] = {
           opening: d.opening, delivIn: d.delivIn, transIn: d.transIn, transOut: d.transOut, salesOut: d.salesOut,
-          totalSupply, used, current, burnPerHour, hoursLeft,
+          totalSupply, used, current, burnTotal, burnRecent, hoursLeft,
         };
       }
     }
