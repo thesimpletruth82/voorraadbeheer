@@ -8,6 +8,8 @@
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    /* Prevent double-tap zoom on mobile */
+    * { touch-action: manipulation; }
     .liter-row {
       display: flex; align-items: center; justify-content: space-between;
       padding: 10px 12px; border-bottom: 1px solid var(--border); gap: 12px;
@@ -45,15 +47,15 @@
             <select id="saleLoc" style="font-size:15px; padding:12px;"></select>
           </div>
 
-          <!-- Summary bar + submit -->
-          <div class="sale-summary hidden" id="summary">
+          <!-- Summary bar + submit (always visible) -->
+          <div class="sale-summary" id="summary">
             <div>
-              <div class="sale-summary-count" id="totalCount">0 items</div>
-              <div class="sale-summary-label">Ready to submit</div>
+              <div class="sale-summary-count" id="totalCount">No items selected</div>
+              <div class="sale-summary-label">Tap products to add</div>
             </div>
             <div style="display:flex; gap:8px;">
-              <button class="btn btn-ghost btn-sm" onclick="clearTaps()"><i data-lucide="x"></i> Clear</button>
-              <button class="btn btn-success" onclick="submitAll()" id="submitBtn"><i data-lucide="check"></i> Submit Sales</button>
+              <button class="btn btn-ghost btn-sm hidden" id="clearBtn" onclick="clearTaps()"><i data-lucide="x"></i> Clear</button>
+              <button class="btn btn-success" onclick="submitAll()" id="submitBtn" disabled><i data-lucide="check"></i> Submit Sales</button>
             </div>
           </div>
 
@@ -169,16 +171,23 @@
       const tapTotal = Object.values(tapCounts).reduce((a, b) => a + b, 0);
       const literTotal = countLiterSales();
       const total = tapTotal + literTotal;
-      const $summary = document.getElementById('summary');
       const $count = document.getElementById('totalCount');
+      const $label = document.querySelector('.sale-summary-label');
+      const $submitBtn = document.getElementById('submitBtn');
+      const $clearBtn = document.getElementById('clearBtn');
       if (total > 0) {
-        $summary.classList.remove('hidden');
         const parts = [];
         if (tapTotal > 0) parts.push(tapTotal + ' item' + (tapTotal !== 1 ? 's' : ''));
         if (literTotal > 0) parts.push(literTotal + 'L');
         $count.textContent = parts.join(' + ');
+        $label.textContent = 'Ready to submit';
+        $submitBtn.disabled = false;
+        $clearBtn.classList.remove('hidden');
       } else {
-        $summary.classList.add('hidden');
+        $count.textContent = 'No items selected';
+        $label.textContent = 'Tap products to add';
+        $submitBtn.disabled = true;
+        $clearBtn.classList.add('hidden');
       }
     }
 
