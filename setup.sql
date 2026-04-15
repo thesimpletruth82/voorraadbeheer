@@ -42,6 +42,7 @@ CREATE TABLE skus (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name       TEXT NOT NULL,
   unit       TEXT NOT NULL DEFAULT 'pcs',
+  sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

@@ -45,16 +45,26 @@ const DB = {
 
   // ── SKUs ────────────────────────────────────────────────
   async getSkus() {
-    const { data } = await sb().from('skus').select('*').order('name');
+    const { data } = await sb().from('skus').select('*').order('sort_order').order('name');
     return data || [];
   },
   async createSku(name, unit) {
-    const { data, error } = await sb().from('skus').insert({ name, unit }).select().single();
+    // Get max sort_order to append at end
+    const { data: existing } = await sb().from('skus').select('sort_order').order('sort_order', { ascending: false }).limit(1);
+    const nextOrder = existing?.length ? (existing[0].sort_order || 0) + 1 : 0;
+    const { data, error } = await sb().from('skus').insert({ name, unit, sort_order: nextOrder }).select().single();
     return { data, error };
   },
   async deleteSku(id) {
     const { error } = await sb().from('skus').delete().eq('id', id);
     return { error };
+  },
+  async reorderSkus(orderedIds) {
+    // orderedIds = array of SKU ids in desired order
+    const promises = orderedIds.map((id, i) =>
+      sb().from('skus').update({ sort_order: i }).eq('id', id)
+    );
+    await Promise.all(promises);
   },
 
   // ── Stock Counts ────────────────────────────────────────

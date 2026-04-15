@@ -7,6 +7,61 @@
   <link rel="stylesheet" href="/css/style.css">
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    .sku-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border);
+      transition: background .12s;
+    }
+    .sku-row:last-child { border-bottom: none; }
+    .sku-row:hover { background: rgba(255,255,255,.02); }
+    .sku-order {
+      font-size: 11px;
+      color: var(--text4);
+      width: 24px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .sku-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sku-unit {
+      flex-shrink: 0;
+    }
+    .sku-actions {
+      display: flex;
+      gap: 4px;
+      flex-shrink: 0;
+    }
+    .move-btn {
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255,255,255,.05);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--text2);
+      cursor: pointer;
+      font-size: 14px;
+      transition: background .1s;
+      padding: 0;
+    }
+    .move-btn:hover { background: rgba(255,255,255,.1); color: var(--text); }
+    .move-btn:disabled { opacity: .25; cursor: default; }
+    .move-btn svg { width: 14px; height: 14px; }
+  </style>
 </head>
 <body>
   <div class="app">
@@ -14,7 +69,7 @@
     <div class="main">
       <div class="page-header">
         <h1>Products (SKUs)</h1>
-        <p>Manage the global product catalog. Products are shared across all events.</p>
+        <p>Manage the global product catalog. Drag to reorder — order is used everywhere.</p>
       </div>
       <div class="page-body">
         <div class="card mb-6">
@@ -48,8 +103,10 @@
   <script>
     renderNav('skus');
 
+    let skus = [];
+
     async function loadSkus() {
-      const skus = await DB.getSkus();
+      skus = await DB.getSkus();
       const $list = document.getElementById('skuList');
 
       if (!skus.length) {
@@ -61,24 +118,36 @@
       $list.innerHTML = `
         <div class="card">
           <div class="card-title"><i data-lucide="package"></i> ${skus.length} Product${skus.length > 1 ? 's' : ''}</div>
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Name</th><th>Unit</th><th class="right">Actions</th></tr></thead>
-              <tbody>
-                ${skus.map(s => `
-                  <tr>
-                    <td><strong>${esc(s.name)}</strong></td>
-                    <td><span class="badge badge-blue">${esc(s.unit)}</span></td>
-                    <td class="right">
-                      <button class="btn btn-sm btn-danger" onclick="delSku('${s.id}')"><i data-lucide="trash-2"></i></button>
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
+          ${skus.map((s, i) => `
+            <div class="sku-row" data-id="${s.id}">
+              <div class="sku-order">${i + 1}</div>
+              <div class="sku-name">${esc(s.name)}</div>
+              <div class="sku-unit"><span class="badge badge-blue">${esc(s.unit)}</span></div>
+              <div class="sku-actions">
+                <button class="move-btn" onclick="move('${s.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Move up"><i data-lucide="chevron-up"></i></button>
+                <button class="move-btn" onclick="move('${s.id}',1)" ${i === skus.length - 1 ? 'disabled' : ''} title="Move down"><i data-lucide="chevron-down"></i></button>
+                <button class="btn btn-sm btn-danger" onclick="delSku('${s.id}')"><i data-lucide="trash-2"></i></button>
+              </div>
+            </div>
+          `).join('')}
         </div>`;
       lucide.createIcons();
+    }
+
+    async function move(id, dir) {
+      const idx = skus.findIndex(s => s.id === id);
+      const newIdx = idx + dir;
+      if (newIdx < 0 || newIdx >= skus.length) return;
+
+      // Swap in local array
+      [skus[idx], skus[newIdx]] = [skus[newIdx], skus[idx]];
+
+      // Save new order to DB
+      const orderedIds = skus.map(s => s.id);
+      await DB.reorderSkus(orderedIds);
+
+      // Re-render
+      loadSkus();
     }
 
     document.getElementById('addForm').addEventListener('submit', async (ev) => {
