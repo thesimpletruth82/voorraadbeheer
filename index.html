@@ -72,8 +72,11 @@
         <p>Create and manage festival events. Set one as active to start tracking.</p>
       </div>
       <div class="page-body">
+        <!-- Event list -->
+        <div id="eventList" class="mb-6"></div>
+
         <!-- Create / Edit event -->
-        <div class="card mb-6">
+        <div class="card">
           <div class="card-title" id="formTitle"><i data-lucide="plus-circle"></i> New Event</div>
           <form id="eventForm">
             <input type="hidden" id="editId" value="">
@@ -137,9 +140,6 @@
             </div>
           </form>
         </div>
-
-        <!-- Event list -->
-        <div id="eventList"></div>
       </div>
     </div>
     <nav class="bottombar" id="bottombar"></nav>
