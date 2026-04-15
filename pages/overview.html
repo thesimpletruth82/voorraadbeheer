@@ -104,11 +104,13 @@
       overflow: hidden;
     }
     .bar-seg-stock {
-      background: rgba(52, 211, 153, .55);
+      background: rgba(124, 58, 237, .7);
       border-radius: 3px 3px 0 0;
+      box-shadow: 0 0 16px rgba(124, 58, 237, .5), 0 0 4px rgba(124, 58, 237, .3);
     }
     .bar-seg-sold {
-      background: rgba(244, 63, 94, .55);
+      background: rgba(251, 146, 60, .8);
+      box-shadow: 0 0 16px rgba(251, 146, 60, .5), 0 0 4px rgba(251, 146, 60, .3);
     }
     .bar-seg-val {
       font-size: 10px;
@@ -159,8 +161,8 @@
       margin-right: 4px;
       vertical-align: middle;
     }
-    .legend-stock { background: rgba(52,211,153,.55); }
-    .legend-sold  { background: rgba(244,63,94,.55); }
+    .legend-stock { background: rgba(124,58,237,.7); box-shadow: 0 0 8px rgba(124,58,237,.5); }
+    .legend-sold  { background: rgba(251,146,60,.8); box-shadow: 0 0 8px rgba(251,146,60,.5); }
   </style>
 </head>
 <body>
@@ -290,6 +292,78 @@
       return b.toFixed(1) + '/h';
     }
 
+    // ── Shared chart builder ────────────────────────────
+    const CHART_H = 200;
+
+    function buildBarSection(items, maxVal) {
+      const steps = 5;
+      const stepVal = Math.ceil(maxVal / steps);
+      const niceMax = stepVal * steps;
+
+      let gridHTML = '';
+      for (let i = 0; i <= steps; i++) {
+        const pct = ((stepVal * i) / niceMax) * 100;
+        gridHTML += `<div class="chart-gridline" style="bottom:${pct}%"></div>`;
+      }
+      let yHTML = '';
+      for (let i = steps; i >= 0; i--) yHTML += `<span>${stepVal * i}</span>`;
+
+      const barsHTML = items.map(e => {
+        const total = e.totalSupply;
+        const sold = e.salesOut;
+        const remaining = Math.max(0, total - sold);
+        const totalH = (total / niceMax) * CHART_H;
+        const soldH = total > 0 ? (sold / total) * totalH : 0;
+        const remainH = totalH - soldH;
+        const stockLabel = remaining > 0 && remainH >= 16 ? `<span class="bar-seg-val">${Math.round(remaining)}</span>` : '';
+        const soldLabel = sold > 0 && soldH >= 16 ? `<span class="bar-seg-val">${sold}</span>` : '';
+        return `<div class="bar-col">
+          <div class="bar-stack" style="height:${Math.max(totalH, 2)}px">
+            <div class="bar-seg bar-seg-stock" style="height:${remainH}px">${stockLabel}</div>
+            <div class="bar-seg bar-seg-sold" style="height:${soldH}px">${soldLabel}</div>
+          </div>
+        </div>`;
+      }).join('');
+
+      const labelsHTML = items.map(e =>
+        `<div class="bar-label-col"><div class="bar-label">${esc(e.sku.name)}</div></div>`
+      ).join('');
+
+      return `
+        <div class="chart-area">
+          <div class="chart-yaxis">${yHTML}</div>
+          <div class="chart-grid">${gridHTML}<div class="bar-row">${barsHTML}</div></div>
+        </div>
+        <div class="bar-labels">${labelsHTML}</div>`;
+    }
+
+    function buildChart(entries) {
+      const byUnit = {};
+      for (const e of entries) {
+        const u = e.sku.unit;
+        if (!byUnit[u]) byUnit[u] = [];
+        byUnit[u].push(e);
+      }
+      const unitNames = Object.keys(byUnit).sort();
+      let html = '<div class="chart-sections">';
+      for (const unit of unitNames) {
+        const items = byUnit[unit];
+        const sectionMax = Math.max(...items.map(e => e.totalSupply), 1);
+        const label = unit.charAt(0).toUpperCase() + unit.slice(1);
+        const cls = unit === 'liters' ? ' chart-section-liters' : '';
+        html += `<div class="chart-section${cls}">`;
+        html += `<div class="chart-section-title">${esc(label)}</div>`;
+        html += buildBarSection(items, sectionMax);
+        html += `</div>`;
+      }
+      html += '</div>';
+      html += `<div class="chart-legend">
+        <span><span class="legend-dot legend-stock"></span>Remaining</span>
+        <span><span class="legend-dot legend-sold"></span>Sold</span>
+      </div>`;
+      return html;
+    }
+
     // ── Event totals (all locations combined) ───────────
     function renderTotals(locations, skus, breakdown) {
       const $el = document.getElementById('totals');
@@ -343,6 +417,8 @@
         </tr>`;
       }).join('');
 
+      const chartHTML = buildChart(entries);
+
       $el.innerHTML = `
         <div class="card mb-6">
           <div class="card-title"><i data-lucide="layers"></i> Event Totals — All Locations</div>
@@ -358,6 +434,7 @@
               <tbody>${tableRows}</tbody>
             </table>
           </div>
+          <div class="bar-chart-wrap">${chartHTML}</div>
         </div>`;
       lucide.createIcons();
     }
@@ -437,87 +514,7 @@
         }).join('');
 
         // ── Stacked bar charts — one section per UOM ──
-        const byUnit = {};
-        for (const e of entries) {
-          const u = e.sku.unit;
-          if (!byUnit[u]) byUnit[u] = [];
-          byUnit[u].push(e);
-        }
-
-        const chartH = 200;
-
-        function renderSection(items, maxVal) {
-          // Y-axis gridlines (5 steps)
-          const steps = 5;
-          const stepVal = Math.ceil(maxVal / steps);
-          const niceMax = stepVal * steps;
-
-          let gridHTML = '';
-          let yLabels = '';
-          for (let i = 0; i <= steps; i++) {
-            const val = stepVal * i;
-            const pct = (val / niceMax) * 100;
-            gridHTML += `<div class="chart-gridline" style="bottom:${pct}%"></div>`;
-          }
-          // Y-axis labels
-          let yHTML = '';
-          for (let i = steps; i >= 0; i--) {
-            yHTML += `<span>${stepVal * i}</span>`;
-          }
-
-          // Bars
-          const barsHTML = items.map(e => {
-            const total = e.totalSupply;
-            const sold = e.salesOut;
-            const remaining = Math.max(0, total - sold);
-            const totalH = (total / niceMax) * chartH;
-            const soldH = total > 0 ? (sold / total) * totalH : 0;
-            const remainH = totalH - soldH;
-
-            const stockLabel = remaining > 0 && remainH >= 16 ? `<span class="bar-seg-val">${Math.round(remaining)}</span>` : '';
-            const soldLabel = sold > 0 && soldH >= 16 ? `<span class="bar-seg-val">${sold}</span>` : '';
-
-            return `<div class="bar-col">
-              <div class="bar-stack" style="height:${Math.max(totalH, 2)}px">
-                <div class="bar-seg bar-seg-stock" style="height:${remainH}px">${stockLabel}</div>
-                <div class="bar-seg bar-seg-sold" style="height:${soldH}px">${soldLabel}</div>
-              </div>
-            </div>`;
-          }).join('');
-
-          // Labels row — full name, no truncation
-          const labelsHTML = items.map(e => {
-            return `<div class="bar-label-col"><div class="bar-label">${esc(e.sku.name)}</div></div>`;
-          }).join('');
-
-          return `
-            <div class="chart-area">
-              <div class="chart-yaxis">${yHTML}</div>
-              <div class="chart-grid">
-                ${gridHTML}
-                <div class="bar-row">${barsHTML}</div>
-              </div>
-            </div>
-            <div class="bar-labels">${labelsHTML}</div>`;
-        }
-
-        const unitNames = Object.keys(byUnit).sort();
-        let chartHTML = '<div class="chart-sections">';
-        for (const unit of unitNames) {
-          const items = byUnit[unit];
-          const sectionMax = Math.max(...items.map(e => e.totalSupply), 1);
-          const label = unit.charAt(0).toUpperCase() + unit.slice(1);
-          const sectionCls = unit === 'liters' ? ' chart-section-liters' : '';
-          chartHTML += `<div class="chart-section${sectionCls}">`;
-          chartHTML += `<div class="chart-section-title">${esc(label)}</div>`;
-          chartHTML += renderSection(items, sectionMax);
-          chartHTML += `</div>`;
-        }
-        chartHTML += '</div>';
-        chartHTML += `<div class="chart-legend">
-          <span><span class="legend-dot legend-stock"></span>Remaining</span>
-          <span><span class="legend-dot legend-sold"></span>Sold</span>
-        </div>`;
+        const chartHTML = buildChart(entries);
 
         return `
           <div style="margin-bottom:24px;">
