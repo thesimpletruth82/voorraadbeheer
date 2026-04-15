@@ -6,9 +6,13 @@ const DB = {
     const { data } = await sb().from('events').select('*').order('date', { ascending: false });
     return data || [];
   },
-  async createEvent(name, date) {
-    const { data, error } = await sb().from('events').insert({ name, date }).select().single();
+  async createEvent(fields) {
+    const { data, error } = await sb().from('events').insert(fields).select().single();
     return { data, error };
+  },
+  async updateEvent(id, fields) {
+    const { error } = await sb().from('events').update(fields).eq('id', id);
+    return { error };
   },
   async updateEventStatus(id, status) {
     const { error } = await sb().from('events').update({ status }).eq('id', id);

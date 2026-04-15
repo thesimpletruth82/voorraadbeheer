@@ -16,11 +16,18 @@ DROP TABLE IF EXISTS bars           CASCADE;
 
 -- ── Events ──────────────────────────────────────────────────
 CREATE TABLE events (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name       TEXT NOT NULL,
-  date       DATE NOT NULL,
-  status     TEXT NOT NULL DEFAULT 'setup' CHECK (status IN ('setup', 'active', 'closed')),
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        TEXT NOT NULL,
+  date        DATE NOT NULL,
+  start_time  TIME,
+  end_time    TIME,
+  latitude    NUMERIC,
+  longitude   NUMERIC,
+  temperature NUMERIC,
+  weather     TEXT CHECK (weather IS NULL OR weather IN ('rain', 'cloudy', 'cloudy_sunny', 'sunny')),
+  crowd       TEXT CHECK (crowd IS NULL OR crowd IN ('not_busy', 'relatively_busy', 'busy', 'very_busy')),
+  status      TEXT NOT NULL DEFAULT 'setup' CHECK (status IN ('setup', 'active', 'closed')),
+  created_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ── Locations ───────────────────────────────────────────────
