@@ -62,18 +62,27 @@ function esc(s) {
 }
 
 // ── Sidebar + Bottombar renderer ─────────────────────────
+// Filters nav items based on the current user's role:
+//   • superuser : everything + Users admin
+//   • admin     : everything except Users admin
+//   • runner    : Sales only
+//   • anonymous : brand only (used briefly before login redirect)
 function renderNav(activePage) {
   const pages = [
-    { id: 'events',    label: 'Events',    icon: 'calendar',        href: '/' },
-    { id: 'locations', label: 'Locations',  icon: 'map-pin',         href: '/pages/setup-locations.html', section: 'Setup' },
-    { id: 'skus',      label: 'Products',   icon: 'package',         href: '/pages/setup-skus.html' },
-    { id: 'opening',   label: 'Opening Count', icon: 'clipboard-list', href: '/pages/opening.html', section: 'Counts' },
-    { id: 'closing',   label: 'Closing Count', icon: 'clipboard-check', href: '/pages/closing.html' },
-    { id: 'overview',  label: 'Live Overview', icon: 'activity',     href: '/pages/overview.html', section: 'Operations' },
-    { id: 'sales',     label: 'Sales',         icon: 'shopping-cart', href: '/pages/sales.html' },
-    { id: 'movement',  label: 'Log Movement',  icon: 'truck',        href: '/pages/movement.html' },
-    { id: 'variance',  label: 'Variance Report', icon: 'bar-chart-2', href: '/pages/variance.html', section: 'Reports' },
+    { id: 'events',    label: 'Events',         icon: 'calendar',         href: '/',                             roles: ['superuser', 'admin'] },
+    { id: 'locations', label: 'Locations',      icon: 'map-pin',          href: '/pages/setup-locations.html', section: 'Setup', roles: ['superuser', 'admin'] },
+    { id: 'skus',      label: 'Products',       icon: 'package',          href: '/pages/setup-skus.html',       roles: ['superuser', 'admin'] },
+    { id: 'opening',   label: 'Opening Count',  icon: 'clipboard-list',   href: '/pages/opening.html', section: 'Counts', roles: ['superuser', 'admin'] },
+    { id: 'closing',   label: 'Closing Count',  icon: 'clipboard-check',  href: '/pages/closing.html',          roles: ['superuser', 'admin'] },
+    { id: 'overview',  label: 'Live Overview',  icon: 'activity',         href: '/pages/overview.html', section: 'Operations', roles: ['superuser', 'admin'] },
+    { id: 'sales',     label: 'Sales',          icon: 'shopping-cart',    href: '/pages/sales.html',            roles: ['superuser', 'admin', 'runner'] },
+    { id: 'movement',  label: 'Log Movement',   icon: 'truck',            href: '/pages/movement.html',         roles: ['superuser', 'admin'] },
+    { id: 'variance',  label: 'Variance Report',icon: 'bar-chart-2',      href: '/pages/variance.html', section: 'Reports', roles: ['superuser', 'admin'] },
+    { id: 'users',     label: 'Users & Roles',  icon: 'users',            href: '/pages/users.html',    section: 'Admin',   roles: ['superuser'] },
   ];
+
+  const role = (typeof Auth !== 'undefined' && Auth.role) ? Auth.role() : null;
+  const visible = role ? pages.filter(p => p.roles.includes(role)) : [];
 
   // Sidebar
   const sidebar = document.getElementById('sidebar');
@@ -94,7 +103,7 @@ function renderNav(activePage) {
 
     html += '<div class="sidebar-nav">';
     let currentSection = '';
-    for (const p of pages) {
+    for (const p of visible) {
       if (p.section && p.section !== currentSection) {
         currentSection = p.section;
         html += `<div class="nav-section"><div class="nav-section-label">${p.section}</div></div>`;
@@ -103,16 +112,33 @@ function renderNav(activePage) {
       html += `<a class="nav-link${active}" href="${p.href}"><i data-lucide="${p.icon}"></i>${p.label}</a>`;
     }
     html += '</div>';
+
+    // User pill + sign-out at the bottom
+    if (typeof Auth !== 'undefined' && Auth.signedIn && Auth.signedIn()) {
+      const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : '';
+      const email = Auth.profile?.email || '';
+      html += `
+        <div class="sidebar-user">
+          <div class="sidebar-user-info">
+            <div class="sidebar-user-email" title="${esc(email)}">${esc(email)}</div>
+            <div class="sidebar-user-role">${roleLabel}</div>
+          </div>
+          <button class="sidebar-user-btn" onclick="Auth.signOut()" title="Sign out">
+            <i data-lucide="log-out"></i>
+          </button>
+        </div>`;
+    }
+
     sidebar.innerHTML = html;
   }
 
-  // Bottom bar (mobile) — show key pages
-  const bottomPages = [
-    { id: 'overview', label: 'Overview',  icon: 'activity',        href: '/pages/overview.html' },
-    { id: 'sales',    label: 'Sales',     icon: 'shopping-cart',   href: '/pages/sales.html' },
-    { id: 'movement', label: 'Movement',  icon: 'truck',           href: '/pages/movement.html' },
-    { id: 'events',   label: 'Events',    icon: 'calendar',        href: '/' },
-  ];
+  // Bottom bar (mobile) — pick up to 4 role-appropriate pages
+  const bottomIds = role === 'runner'
+    ? ['sales']
+    : ['overview', 'sales', 'movement', 'events'];
+  const bottomPages = bottomIds
+    .map(id => visible.find(p => p.id === id))
+    .filter(Boolean);
 
   const bottombar = document.getElementById('bottombar');
   if (bottombar) {

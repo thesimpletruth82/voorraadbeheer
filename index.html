@@ -75,8 +75,8 @@
         <!-- Event list -->
         <div id="eventList" class="mb-6"></div>
 
-        <!-- Create / Edit event -->
-        <div class="card">
+        <!-- Create / Edit event (superuser-only; admins can only edit existing) -->
+        <div class="card" id="eventFormCard" style="display:none;">
           <div class="card-title" id="formTitle"><i data-lucide="plus-circle"></i> New Event</div>
           <form id="eventForm">
             <input type="hidden" id="editId" value="">
@@ -146,10 +146,9 @@
   </div>
 
   <script src="/js/supabase.js"></script>
+  <script src="/js/auth.js"></script>
   <script src="/js/db.js"></script>
   <script>
-    renderNav('events');
-
     const $list = document.getElementById('eventList');
     const $form = document.getElementById('eventForm');
 
@@ -253,58 +252,19 @@
     }
 
     // ── Load & Render ────────────────────────────────
-    async function loadEvents() {
-      const events = await DB.getEvents();
-      if (!events.length) {
-        $list.innerHTML = `<div class="empty-state"><i data-lucide="calendar"></i><h3>No events yet</h3><p>Create your first event above to get started.</p></div>`;
-        lucide.createIcons();
-        return;
-      }
-
-      $list.innerHTML = events.map(e => {
-        const badgeClass = e.status === 'active' ? 'badge-green' : e.status === 'closed' ? 'badge-gray' : 'badge-purple';
-        const statusLabel = e.status.charAt(0).toUpperCase() + e.status.slice(1);
-
-        let details = '';
-        if (e.start_time || e.end_time) details += `<span class="tag">${e.start_time || '?'} – ${e.end_time || '?'}</span>`;
-        if (e.temperature !== null && e.temperature !== undefined) details += `<span class="tag">${e.temperature}&deg;C</span>`;
-        if (e.weather) details += `<span class="tag">${weatherLabels[e.weather] || e.weather}</span>`;
-        if (e.crowd) details += `<span class="tag">${crowdLabels[e.crowd] || e.crowd}</span>`;
-
-        let actions = '';
-        if (e.status === 'active') {
-          actions += `<button class="btn btn-sm btn-ghost" onclick="deactivate('${e.id}')"><i data-lucide="pause"></i> Deactivate</button>`;
-        } else {
-          actions += `<button class="btn btn-sm btn-success" onclick="activate('${e.id}','${esc(e.name)}')"><i data-lucide="play"></i> Activate</button>`;
-        }
-        actions += `<button class="btn btn-sm btn-ghost" onclick="editEvent('${e.id}')"><i data-lucide="edit"></i></button>`;
-        actions += `<button class="btn btn-sm btn-danger" onclick="del('${e.id}')"><i data-lucide="trash-2"></i></button>`;
-
-        return `
-          <div class="event-card">
-            <div class="event-info">
-              <div class="event-name">${esc(e.name)}</div>
-              <div class="event-date">${e.date || 'No date'} &nbsp;<span class="badge ${badgeClass}">${statusLabel}</span></div>
-              ${details ? `<div class="event-detail">${details}</div>` : ''}
-            </div>
-            <div class="event-actions">${actions}</div>
-          </div>`;
-      }).join('');
-      lucide.createIcons();
-    }
-
-    // Keep events in memory for edit
     let allEvents = [];
-    const _origLoad = loadEvents;
-    loadEvents = async function() {
+    async function loadEvents() {
       allEvents = await DB.getEvents();
-      // render using allEvents
       if (!allEvents.length) {
-        $list.innerHTML = `<div class="empty-state"><i data-lucide="calendar"></i><h3>No events yet</h3><p>Create your first event above to get started.</p></div>`;
+        const msg = Auth.isSuperuser()
+          ? 'Create your first event below to get started.'
+          : 'You have not been assigned to any events yet. Ask a superuser for access.';
+        $list.innerHTML = `<div class="empty-state"><i data-lucide="calendar"></i><h3>No events yet</h3><p>${msg}</p></div>`;
         lucide.createIcons();
         return;
       }
 
+      const canDelete = Auth.isSuperuser();
       $list.innerHTML = allEvents.map(e => {
         const badgeClass = e.status === 'active' ? 'badge-green' : e.status === 'closed' ? 'badge-gray' : 'badge-purple';
         const statusLabel = e.status.charAt(0).toUpperCase() + e.status.slice(1);
@@ -322,7 +282,9 @@
           actions += `<button class="btn btn-sm btn-success" onclick="activate('${e.id}','${esc(e.name)}')"><i data-lucide="play"></i> Activate</button>`;
         }
         actions += `<button class="btn btn-sm btn-ghost" onclick="editEvent('${e.id}')"><i data-lucide="edit"></i></button>`;
-        actions += `<button class="btn btn-sm btn-danger" onclick="del('${e.id}')"><i data-lucide="trash-2"></i></button>`;
+        if (canDelete) {
+          actions += `<button class="btn btn-sm btn-danger" onclick="del('${e.id}')"><i data-lucide="trash-2"></i></button>`;
+        }
 
         return `
           <div class="event-card">
@@ -335,7 +297,7 @@
           </div>`;
       }).join('');
       lucide.createIcons();
-    };
+    }
 
     function editEvent(id) {
       const e = allEvents.find(ev => ev.id === id);
@@ -401,7 +363,17 @@
       loadEvents();
     }
 
-    loadEvents();
+    // ── Init (auth-gated) ──────────────────────────
+    (async () => {
+      if (!(await Auth.require())) return;
+      renderNav('events');
+      // Only superusers can create events; admins can only edit/activate their assigned ones.
+      if (Auth.isSuperuser()) {
+        document.getElementById('eventFormCard').style.display = '';
+        setTimeout(() => map.invalidateSize(), 300);
+      }
+      loadEvents();
+    })();
   </script>
 </body>
 </html>

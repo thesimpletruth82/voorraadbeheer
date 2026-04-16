@@ -9,6 +9,9 @@
     { "source": "/overview",   "destination": "/pages/overview.html" },
     { "source": "/sales",      "destination": "/pages/sales.html" },
     { "source": "/movement",   "destination": "/pages/movement.html" },
-    { "source": "/variance",   "destination": "/pages/variance.html" }
+    { "source": "/variance",   "destination": "/pages/variance.html" },
+    { "source": "/login",      "destination": "/pages/login.html" },
+    { "source": "/signup",     "destination": "/pages/signup.html" },
+    { "source": "/users",      "destination": "/pages/users.html" }
   ]
 }

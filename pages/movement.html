@@ -82,12 +82,13 @@
   </div>
 
   <script src="/js/supabase.js"></script>
+  <script src="/js/auth.js"></script>
   <script src="/js/db.js"></script>
   <script>
-    renderNav('movement');
-
     let eventId;
     (async () => {
+      if (!(await Auth.require())) return;
+      renderNav('movement');
       eventId = await Ctx.ensure();
       renderNav('movement');
       if (!eventId) {

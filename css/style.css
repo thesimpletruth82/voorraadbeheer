@@ -116,6 +116,37 @@ a:hover { text-decoration: underline; }
 .nav-link.active { background: rgba(59,130,246,.15); color: var(--accent); }
 .nav-link svg    { width: 15px; height: 15px; flex-shrink: 0; }
 
+/* ── Sidebar user pill ───────────────────────────────────── */
+.sidebar-user {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  background: rgba(0,0,0,.15);
+}
+.sidebar-user-info { flex: 1; min-width: 0; }
+.sidebar-user-email {
+  font-size: 12px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-weight: 500;
+}
+.sidebar-user-role {
+  font-size: 10px; color: var(--text3);
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.sidebar-user-btn {
+  background: transparent;
+  border: 1px solid var(--border2);
+  color: var(--text2);
+  width: 30px; height: 30px;
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.sidebar-user-btn:hover { color: var(--red); border-color: var(--red); }
+.sidebar-user-btn svg   { width: 14px; height: 14px; }
+
 /* ── Bottom bar (mobile) ─────────────────────────────────── */
 .bottombar {
   display: none;

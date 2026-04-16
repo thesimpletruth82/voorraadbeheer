@@ -33,12 +33,13 @@
   </div>
 
   <script src="/js/supabase.js"></script>
+  <script src="/js/auth.js"></script>
   <script src="/js/db.js"></script>
   <script>
-    renderNav('closing');
-
     let eventId;
     (async () => {
+      if (!(await Auth.require())) return;
+      renderNav('closing');
       eventId = await Ctx.ensure();
       renderNav('closing');
       if (!eventId) {

@@ -268,6 +268,82 @@ const DB = {
     return result;
   },
 
+  // ── Users, Invites, Assignments (superuser-only) ────────
+  async getAllProfiles() {
+    const { data } = await sb().from('profiles').select('*').order('created_at');
+    return data || [];
+  },
+  async updatePlatformRole(userId, role) {
+    const { error } = await sb().from('profiles').update({ platform_role: role }).eq('id', userId);
+    return { error };
+  },
+  async deleteProfile(userId) {
+    // This only deletes from profiles — the auth.users row stays unless
+    // the superuser removes it in the Supabase dashboard.
+    const { error } = await sb().from('profiles').delete().eq('id', userId);
+    return { error };
+  },
+
+  async getInvites() {
+    const { data } = await sb()
+      .from('invites')
+      .select('*, event:events(id,name)')
+      .order('created_at', { ascending: false });
+    return data || [];
+  },
+  async createInvite({ email, platformRole, eventId }) {
+    const row = { email: email.toLowerCase().trim(), platform_role: platformRole };
+    if (eventId) row.event_id = eventId;
+    const { data, error } = await sb().from('invites').insert(row).select().single();
+    return { data, error };
+  },
+  async deleteInvite(id) {
+    const { error } = await sb().from('invites').delete().eq('id', id);
+    return { error };
+  },
+
+  // Returns [{ event_id, user_id, assigned_at, email, platform_role }]
+  async getEventAssignments(eventId) {
+    const { data: rows } = await sb()
+      .from('event_assignments')
+      .select('*')
+      .eq('event_id', eventId);
+    if (!rows || !rows.length) return [];
+
+    const userIds = rows.map(r => r.user_id);
+    const { data: profs } = await sb()
+      .from('profiles')
+      .select('id, email, platform_role')
+      .in('id', userIds);
+    const byId = Object.fromEntries((profs || []).map(p => [p.id, p]));
+    return rows.map(r => ({
+      ...r,
+      email: byId[r.user_id]?.email || '(unknown)',
+      platform_role: byId[r.user_id]?.platform_role || null,
+    }));
+  },
+  async getAssignmentsForUser(userId) {
+    const { data } = await sb()
+      .from('event_assignments')
+      .select('event_id')
+      .eq('user_id', userId);
+    return (data || []).map(r => r.event_id);
+  },
+  async assignUserToEvent(eventId, userId) {
+    const { error } = await sb()
+      .from('event_assignments')
+      .insert({ event_id: eventId, user_id: userId });
+    return { error };
+  },
+  async unassignUserFromEvent(eventId, userId) {
+    const { error } = await sb()
+      .from('event_assignments')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('user_id', userId);
+    return { error };
+  },
+
   // ── Variance Data ──────────────────────────────────────
   // Returns array of { locationId, locationName, skuId, skuName, unit, opening, deliveriesIn, transfersOut, transfersIn, expected, actual, variance }
   async getVarianceData(eventId) {
