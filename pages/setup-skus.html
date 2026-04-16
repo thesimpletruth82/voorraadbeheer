@@ -8,20 +8,44 @@
   <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <script src="https://unpkg.com/lucide@latest"></script>
   <style>
+    * { touch-action: manipulation; }
+    .sku-list { list-style: none; padding: 0; margin: 0; }
     .sku-row {
       display: flex;
       align-items: center;
       gap: 10px;
-      padding: 8px 12px;
+      padding: 10px 12px;
       border-bottom: 1px solid var(--border);
-      transition: background .12s;
+      background: rgba(18,24,40,.97);
+      transition: background .12s, box-shadow .15s, transform .15s;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
     }
     .sku-row:last-child { border-bottom: none; }
-    .sku-row:hover { background: rgba(255,255,255,.02); }
+    .sku-row:hover { background: rgba(255,255,255,.03); }
+    .sku-row.dragging {
+      opacity: .85;
+      box-shadow: 0 8px 24px rgba(0,0,0,.4), 0 0 0 1px var(--accent);
+      z-index: 10;
+      cursor: grabbing;
+      border-radius: 8px;
+    }
+    .sku-row.drag-over {
+      border-top: 2px solid var(--accent);
+    }
+    .drag-handle {
+      color: var(--text4);
+      flex-shrink: 0;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+    }
+    .drag-handle svg { width: 16px; height: 16px; }
     .sku-order {
       font-size: 11px;
       color: var(--text4);
-      width: 24px;
+      width: 22px;
       text-align: center;
       flex-shrink: 0;
     }
@@ -35,32 +59,8 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .sku-unit {
-      flex-shrink: 0;
-    }
-    .sku-actions {
-      display: flex;
-      gap: 4px;
-      flex-shrink: 0;
-    }
-    .move-btn {
-      width: 28px;
-      height: 28px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: rgba(255,255,255,.05);
-      border: 1px solid var(--border2);
-      border-radius: 6px;
-      color: var(--text2);
-      cursor: pointer;
-      font-size: 14px;
-      transition: background .1s;
-      padding: 0;
-    }
-    .move-btn:hover { background: rgba(255,255,255,.1); color: var(--text); }
-    .move-btn:disabled { opacity: .25; cursor: default; }
-    .move-btn svg { width: 14px; height: 14px; }
+    .sku-unit { flex-shrink: 0; }
+    .sku-del { flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -69,7 +69,7 @@
     <div class="main">
       <div class="page-header">
         <h1>Products (SKUs)</h1>
-        <p>Manage the global product catalog. Drag to reorder — order is used everywhere.</p>
+        <p>Drag to reorder. This order is used across Sales, Overview, Counts, and Reports.</p>
       </div>
       <div class="page-body">
         <div class="card mb-6">
@@ -104,9 +104,14 @@
     renderNav('skus');
 
     let skus = [];
+    let dragSrcId = null;
 
     async function loadSkus() {
       skus = await DB.getSkus();
+      render();
+    }
+
+    function render() {
       const $list = document.getElementById('skuList');
 
       if (!skus.length) {
@@ -118,38 +123,159 @@
       $list.innerHTML = `
         <div class="card">
           <div class="card-title"><i data-lucide="package"></i> ${skus.length} Product${skus.length > 1 ? 's' : ''}</div>
-          ${skus.map((s, i) => `
-            <div class="sku-row" data-id="${s.id}">
-              <div class="sku-order">${i + 1}</div>
-              <div class="sku-name">${esc(s.name)}</div>
-              <div class="sku-unit"><span class="badge badge-blue">${esc(s.unit)}</span></div>
-              <div class="sku-actions">
-                <button class="move-btn" onclick="move('${s.id}',-1)" ${i === 0 ? 'disabled' : ''} title="Move up"><i data-lucide="chevron-up"></i></button>
-                <button class="move-btn" onclick="move('${s.id}',1)" ${i === skus.length - 1 ? 'disabled' : ''} title="Move down"><i data-lucide="chevron-down"></i></button>
-                <button class="btn btn-sm btn-danger" onclick="delSku('${s.id}')"><i data-lucide="trash-2"></i></button>
+          <div class="sku-list" id="skuSortable">
+            ${skus.map((s, i) => `
+              <div class="sku-row" draggable="true" data-id="${s.id}">
+                <div class="drag-handle"><i data-lucide="grip-vertical"></i></div>
+                <div class="sku-order">${i + 1}</div>
+                <div class="sku-name">${esc(s.name)}</div>
+                <div class="sku-unit"><span class="badge badge-blue">${esc(s.unit)}</span></div>
+                <div class="sku-del">
+                  <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); delSku('${s.id}')"><i data-lucide="trash-2"></i></button>
+                </div>
               </div>
-            </div>
-          `).join('')}
+            `).join('')}
+          </div>
         </div>`;
       lucide.createIcons();
+      initDrag();
     }
 
-    async function move(id, dir) {
-      const idx = skus.findIndex(s => s.id === id);
-      const newIdx = idx + dir;
-      if (newIdx < 0 || newIdx >= skus.length) return;
+    // ── Drag & Drop ─────────────────────────────────
+    function initDrag() {
+      const rows = document.querySelectorAll('.sku-row[draggable]');
+      rows.forEach(row => {
+        row.addEventListener('dragstart', onDragStart);
+        row.addEventListener('dragend', onDragEnd);
+        row.addEventListener('dragover', onDragOver);
+        row.addEventListener('dragenter', onDragEnter);
+        row.addEventListener('dragleave', onDragLeave);
+        row.addEventListener('drop', onDrop);
 
-      // Swap in local array
-      [skus[idx], skus[newIdx]] = [skus[newIdx], skus[idx]];
-
-      // Save new order to DB
-      const orderedIds = skus.map(s => s.id);
-      await DB.reorderSkus(orderedIds);
-
-      // Re-render
-      loadSkus();
+        // Touch support
+        row.addEventListener('touchstart', onTouchStart, { passive: false });
+        row.addEventListener('touchmove', onTouchMove, { passive: false });
+        row.addEventListener('touchend', onTouchEnd);
+      });
     }
 
+    function onDragStart(e) {
+      dragSrcId = e.currentTarget.dataset.id;
+      e.currentTarget.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function onDragEnd(e) {
+      e.currentTarget.classList.remove('dragging');
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function onDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+
+    function onDragEnter(e) {
+      e.preventDefault();
+      const row = e.currentTarget;
+      if (row.dataset.id !== dragSrcId) row.classList.add('drag-over');
+    }
+
+    function onDragLeave(e) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    async function onDrop(e) {
+      e.preventDefault();
+      const targetId = e.currentTarget.dataset.id;
+      e.currentTarget.classList.remove('drag-over');
+      if (!dragSrcId || dragSrcId === targetId) return;
+
+      // Reorder in local array
+      const fromIdx = skus.findIndex(s => s.id === dragSrcId);
+      const toIdx = skus.findIndex(s => s.id === targetId);
+      const [moved] = skus.splice(fromIdx, 1);
+      skus.splice(toIdx, 0, moved);
+
+      render();
+      await DB.reorderSkus(skus.map(s => s.id));
+      dragSrcId = null;
+    }
+
+    // ── Touch drag support ──────────────────────────
+    let touchRow = null, touchClone = null, touchStartY = 0;
+
+    function onTouchStart(e) {
+      // Only drag from the handle area
+      const handle = e.target.closest('.drag-handle');
+      if (!handle) return;
+
+      e.preventDefault();
+      touchRow = e.currentTarget;
+      dragSrcId = touchRow.dataset.id;
+      touchStartY = e.touches[0].clientY;
+
+      touchClone = touchRow.cloneNode(true);
+      touchClone.style.position = 'fixed';
+      touchClone.style.left = touchRow.getBoundingClientRect().left + 'px';
+      touchClone.style.width = touchRow.offsetWidth + 'px';
+      touchClone.style.top = touchRow.getBoundingClientRect().top + 'px';
+      touchClone.style.zIndex = '9999';
+      touchClone.style.opacity = '.85';
+      touchClone.style.boxShadow = '0 8px 24px rgba(0,0,0,.4), 0 0 0 1px var(--accent)';
+      touchClone.style.borderRadius = '8px';
+      touchClone.style.pointerEvents = 'none';
+      document.body.appendChild(touchClone);
+
+      touchRow.style.opacity = '.3';
+    }
+
+    function onTouchMove(e) {
+      if (!touchClone) return;
+      e.preventDefault();
+
+      const y = e.touches[0].clientY;
+      const deltaY = y - touchStartY;
+      const origTop = touchRow.getBoundingClientRect().top;
+      touchClone.style.top = (origTop + deltaY) + 'px';
+
+      // Highlight target
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      const target = document.elementFromPoint(e.touches[0].clientX, y);
+      const targetRow = target?.closest('.sku-row[draggable]');
+      if (targetRow && targetRow.dataset.id !== dragSrcId) {
+        targetRow.classList.add('drag-over');
+      }
+    }
+
+    async function onTouchEnd(e) {
+      if (!touchClone) return;
+
+      // Find drop target
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      const lastTouch = e.changedTouches[0];
+      const target = document.elementFromPoint(lastTouch.clientX, lastTouch.clientY);
+      const targetRow = target?.closest('.sku-row[draggable]');
+
+      touchRow.style.opacity = '';
+      touchClone.remove();
+      touchClone = null;
+
+      if (targetRow && targetRow.dataset.id !== dragSrcId) {
+        const fromIdx = skus.findIndex(s => s.id === dragSrcId);
+        const toIdx = skus.findIndex(s => s.id === targetRow.dataset.id);
+        const [moved] = skus.splice(fromIdx, 1);
+        skus.splice(toIdx, 0, moved);
+
+        render();
+        await DB.reorderSkus(skus.map(s => s.id));
+      }
+
+      touchRow = null;
+      dragSrcId = null;
+    }
+
+    // ── Add / Delete ────────────────────────────────
     document.getElementById('addForm').addEventListener('submit', async (ev) => {
       ev.preventDefault();
       const name = document.getElementById('skuName').value.trim();
