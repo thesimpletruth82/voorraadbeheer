@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockFest — Variance Report</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main">
+      <div class="page-header">
+        <h1>Variance Report</h1>
+        <p>Compare expected stock (opening + deliveries − transfers out) vs actual closing count.</p>
+      </div>
+      <div class="page-body">
+        <div id="noEvent" class="empty-state hidden">
+          <i data-lucide="alert-circle"></i>
+          <h3>No active event</h3>
+          <p>Select or activate an event on the <a href="/">Events page</a> first.</p>
+        </div>
+
+        <div id="content" class="hidden">
+          <!-- Threshold control -->
+          <div class="flex items-center gap-3 mb-6">
+            <label class="text-sm" style="white-space:nowrap;">Flag threshold:</label>
+            <div class="stepper">
+              <button type="button" class="stepper-btn" onclick="changeThreshold(-1)">−</button>
+              <input type="number" id="threshold" value="5" min="1" style="width:56px;" onchange="render()">
+              <button type="button" class="stepper-btn" onclick="changeThreshold(1)">+</button>
+            </div>
+            <span class="text-xs text-muted">units</span>
+          </div>
+
+          <!-- Stats -->
+          <div class="stats-row" id="stats"></div>
+
+          <!-- Tables per location -->
+          <div id="tables"></div>
+        </div>
+      </div>
+    </div>
+    <nav class="bottombar" id="bottombar"></nav>
+  </div>
+
+  <script src="/js/supabase.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/db.js"></script>
+  <script>
+    let eventId;
+    (async () => {
+      if (!(await Auth.require())) return;
+      renderNav('variance');
+      eventId = await Ctx.ensure();
+      renderNav('variance');
+      if (!eventId) {
+        document.getElementById('noEvent').classList.remove('hidden');
+      } else {
+        document.getElementById('content').classList.remove('hidden');
+        init();
+      }
+    })();
+
+    let allRows = [];
+
+    async function init() {
+      allRows = await DB.getVarianceData(eventId);
+      render();
+    }
+
+    function changeThreshold(delta) {
+      const input = document.getElementById('threshold');
+      input.value = Math.max(1, (parseInt(input.value) || 5) + delta);
+      render();
+    }
+
+    function render() {
+      const threshold = parseInt(document.getElementById('threshold').value) || 5;
+
+      // Stats
+      const withActual = allRows.filter(r => r.actual !== null);
+      const flagged = withActual.filter(r => Math.abs(r.variance) >= threshold);
+      const positive = withActual.filter(r => r.variance > 0);
+      const negative = withActual.filter(r => r.variance < 0);
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-icon blue"><i data-lucide="list"></i></div>
+          <div class="stat-label">Total Rows</div>
+          <div class="stat-value">${allRows.length}</div>
+          <div class="stat-sub">${withActual.length} with closing count</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon red"><i data-lucide="alert-triangle"></i></div>
+          <div class="stat-label">Flagged</div>
+          <div class="stat-value">${flagged.length}</div>
+          <div class="stat-sub">Variance &ge; ${threshold}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon green"><i data-lucide="trending-up"></i></div>
+          <div class="stat-label">Surplus</div>
+          <div class="stat-value">${positive.length}</div>
+          <div class="stat-sub">More than expected</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon amber"><i data-lucide="trending-down"></i></div>
+          <div class="stat-label">Missing</div>
+          <div class="stat-value">${negative.length}</div>
+          <div class="stat-sub">Less than expected</div>
+        </div>`;
+
+      // Group by location
+      const byLoc = {};
+      for (const r of allRows) {
+        if (!byLoc[r.locationId]) byLoc[r.locationId] = { name: r.locationName, rows: [] };
+        byLoc[r.locationId].rows.push(r);
+      }
+
+      const $tables = document.getElementById('tables');
+
+      if (!allRows.length) {
+        $tables.innerHTML = `
+          <div class="empty-state">
+            <i data-lucide="bar-chart-2"></i>
+            <h3>No data</h3>
+            <p>Enter opening counts and log movements first.</p>
+          </div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      $tables.innerHTML = Object.values(byLoc).map(loc => {
+        const rows = loc.rows.map(r => {
+          let rowCls = '';
+          let varCls = 'var-zero';
+          let varText = '—';
+
+          if (r.variance !== null) {
+            const abs = Math.abs(r.variance);
+            if (abs >= threshold * 2) rowCls = 'row-crit';
+            else if (abs >= threshold) rowCls = 'row-warn';
+
+            if (r.variance > 0) { varCls = 'var-pos'; varText = '+' + r.variance; }
+            else if (r.variance < 0) { varCls = 'var-neg'; varText = String(r.variance); }
+            else { varText = '0'; }
+          }
+
+          return `<tr class="${rowCls}">
+            <td><strong>${esc(r.skuName)}</strong></td>
+            <td class="right">${r.opening}</td>
+            <td class="right">${r.deliveriesIn}</td>
+            <td class="right">${r.transfersIn}</td>
+            <td class="right">${r.transfersOut}</td>
+            <td class="right">${r.salesOut}</td>
+            <td class="right"><strong>${r.expected}</strong></td>
+            <td class="right">${r.actual !== null ? r.actual : '<span class="text-muted">—</span>'}</td>
+            <td class="right"><span class="${varCls}">${varText}</span></td>
+          </tr>`;
+        }).join('');
+
+        return `
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-title"><i data-lucide="map-pin"></i> ${esc(loc.name)}</div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th class="right">Open</th>
+                    <th class="right">Deliv.</th>
+                    <th class="right">Trans In</th>
+                    <th class="right">Trans Out</th>
+                    <th class="right">Sales</th>
+                    <th class="right">Expected</th>
+                    <th class="right">Actual</th>
+                    <th class="right">Variance</th>
+                  </tr>
+                </thead>
+                <tbody>${rows}</tbody>
+              </table>
+            </div>
+          </div>`;
+      }).join('');
+      lucide.createIcons();
+    }
+  </script>
+</body>
+</html>

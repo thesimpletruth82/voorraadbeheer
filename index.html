@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockFest — Events</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9/dist/leaflet.js"></script>
+  <style>
+    .event-form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0 16px;
+    }
+    .event-form-grid .full { grid-column: 1 / -1; }
+    .map-wrap {
+      height: 200px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border2);
+      margin-top: 4px;
+    }
+    .map-wrap .leaflet-container { height: 100%; background: #1a1d2e; }
+    .weather-opts, .crowd-opts {
+      display: flex; gap: 6px; flex-wrap: wrap;
+    }
+    .weather-opts label, .crowd-opts label {
+      display: flex; align-items: center; gap: 5px;
+      padding: 6px 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text2);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+    }
+    .weather-opts input, .crowd-opts input { display: none; }
+    .weather-opts input:checked + span,
+    .crowd-opts input:checked + span { color: var(--accent); }
+    .weather-opts label:has(input:checked),
+    .crowd-opts label:has(input:checked) {
+      border-color: var(--accent);
+      background: rgba(59,130,246,.1);
+    }
+    .event-detail { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+    .event-detail .tag {
+      font-size: 10px; padding: 2px 6px;
+      background: rgba(255,255,255,.05);
+      border-radius: 4px; color: var(--text3);
+    }
+    .map-search {
+      display: flex; gap: 6px; margin-bottom: 6px;
+    }
+    .map-search input {
+      flex: 1;
+    }
+    @media (max-width: 600px) {
+      .event-form-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main">
+      <div class="page-header">
+        <h1>Events</h1>
+        <p>Create and manage festival events. Set one as active to start tracking.</p>
+      </div>
+      <div class="page-body">
+        <!-- Event list -->
+        <div id="eventList" class="mb-6"></div>
+
+        <!-- Create / Edit event (superuser-only; admins can only edit existing) -->
+        <div class="card" id="eventFormCard" style="display:none;">
+          <div class="card-title" id="formTitle"><i data-lucide="plus-circle"></i> New Event</div>
+          <form id="eventForm">
+            <input type="hidden" id="editId" value="">
+            <div class="event-form-grid">
+              <div class="form-group">
+                <label>Event Name</label>
+                <input type="text" id="fName" placeholder="e.g. Summer Festival 2025" required>
+              </div>
+              <div class="form-group">
+                <label>Date</label>
+                <input type="date" id="fDate" required>
+              </div>
+              <div class="form-group">
+                <label>Start Time</label>
+                <input type="time" id="fStart">
+              </div>
+              <div class="form-group">
+                <label>End Time</label>
+                <input type="time" id="fEnd">
+              </div>
+              <div class="form-group">
+                <label>Avg Temperature (&deg;C)</label>
+                <input type="number" id="fTemp" placeholder="e.g. 24" step="0.1">
+              </div>
+              <div class="form-group">
+                <label>Weather</label>
+                <div class="weather-opts">
+                  <label><input type="radio" name="fWeather" value="rain"><span>🌧 Rain</span></label>
+                  <label><input type="radio" name="fWeather" value="cloudy"><span>☁️ Cloudy</span></label>
+                  <label><input type="radio" name="fWeather" value="cloudy_sunny"><span>⛅ Cloudy/Sunny</span></label>
+                  <label><input type="radio" name="fWeather" value="sunny"><span>☀️ Sunny</span></label>
+                </div>
+              </div>
+              <div class="form-group full">
+                <label>Expected Crowd</label>
+                <div class="crowd-opts">
+                  <label><input type="radio" name="fCrowd" value="not_busy"><span>Not Busy</span></label>
+                  <label><input type="radio" name="fCrowd" value="relatively_busy"><span>Relatively Busy</span></label>
+                  <label><input type="radio" name="fCrowd" value="busy"><span>Busy</span></label>
+                  <label><input type="radio" name="fCrowd" value="very_busy"><span>Very Busy</span></label>
+                </div>
+              </div>
+              <div class="form-group full">
+                <label>Location (search or click map)</label>
+                <div class="map-search">
+                  <input type="text" id="mapSearch" placeholder="Search city or address..." onkeydown="if(event.key==='Enter'){event.preventDefault();searchMap();}">
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="searchMap()"><i data-lucide="search"></i></button>
+                </div>
+                <div class="map-wrap" id="mapWrap"><div id="map"></div></div>
+                <div style="display:flex; gap:10px; margin-top:6px;">
+                  <input type="number" id="fLat" placeholder="Latitude" step="any" style="flex:1;">
+                  <input type="number" id="fLng" placeholder="Longitude" step="any" style="flex:1;">
+                </div>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; margin-top:14px;">
+              <button type="submit" class="btn btn-primary" id="formBtn">
+                <i data-lucide="plus"></i> Create Event
+              </button>
+              <button type="button" class="btn btn-ghost hidden" id="cancelBtn" onclick="cancelEdit()">Cancel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    <nav class="bottombar" id="bottombar"></nav>
+  </div>
+
+  <script src="/js/supabase.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/db.js"></script>
+  <script>
+    const $list = document.getElementById('eventList');
+    const $form = document.getElementById('eventForm');
+
+    // ── Map ──────────────────────────────────────────
+    const map = L.map('map').setView([52.37, 4.90], 7);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+      attribution: '',
+      maxZoom: 19,
+    }).addTo(map);
+    let marker = null;
+
+    map.on('click', (ev) => {
+      const { lat, lng } = ev.latlng;
+      document.getElementById('fLat').value = lat.toFixed(6);
+      document.getElementById('fLng').value = lng.toFixed(6);
+      setMarker(lat, lng);
+    });
+
+    function setMarker(lat, lng) {
+      if (marker) marker.setLatLng([lat, lng]);
+      else marker = L.marker([lat, lng]).addTo(map);
+      map.setView([lat, lng], Math.max(map.getZoom(), 12));
+    }
+
+    // Invalidate map size after card is visible
+    setTimeout(() => map.invalidateSize(), 300);
+
+    // ── Map search (Nominatim geocoding) ─────────────
+    async function searchMap() {
+      const q = document.getElementById('mapSearch').value.trim();
+      if (!q) return;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`);
+        const data = await res.json();
+        if (data.length) {
+          const lat = parseFloat(data[0].lat);
+          const lng = parseFloat(data[0].lon);
+          document.getElementById('fLat').value = lat.toFixed(6);
+          document.getElementById('fLng').value = lng.toFixed(6);
+          setMarker(lat, lng);
+          map.setView([lat, lng], 13);
+        } else {
+          toast('Location not found', 'err');
+        }
+      } catch (e) {
+        toast('Search failed', 'err');
+      }
+    }
+
+    // ── Helpers ──────────────────────────────────────
+    const weatherLabels = { rain: '🌧 Rain', cloudy: '☁️ Cloudy', cloudy_sunny: '⛅ Cloudy/Sunny', sunny: '☀️ Sunny' };
+    const crowdLabels = { not_busy: 'Not Busy', relatively_busy: 'Rel. Busy', busy: 'Busy', very_busy: 'Very Busy' };
+
+    function getFormData() {
+      const weather = document.querySelector('input[name="fWeather"]:checked')?.value || null;
+      const crowd = document.querySelector('input[name="fCrowd"]:checked')?.value || null;
+      return {
+        name: document.getElementById('fName').value.trim(),
+        date: document.getElementById('fDate').value,
+        start_time: document.getElementById('fStart').value || null,
+        end_time: document.getElementById('fEnd').value || null,
+        temperature: document.getElementById('fTemp').value ? parseFloat(document.getElementById('fTemp').value) : null,
+        latitude: document.getElementById('fLat').value ? parseFloat(document.getElementById('fLat').value) : null,
+        longitude: document.getElementById('fLng').value ? parseFloat(document.getElementById('fLng').value) : null,
+        weather,
+        crowd,
+      };
+    }
+
+    function fillForm(e) {
+      document.getElementById('editId').value = e.id;
+      document.getElementById('fName').value = e.name;
+      document.getElementById('fDate').value = e.date;
+      document.getElementById('fStart').value = e.start_time || '';
+      document.getElementById('fEnd').value = e.end_time || '';
+      document.getElementById('fTemp').value = e.temperature ?? '';
+      document.getElementById('fLat').value = e.latitude ?? '';
+      document.getElementById('fLng').value = e.longitude ?? '';
+
+      document.querySelectorAll('input[name="fWeather"]').forEach(r => r.checked = r.value === e.weather);
+      document.querySelectorAll('input[name="fCrowd"]').forEach(r => r.checked = r.value === e.crowd);
+
+      if (e.latitude && e.longitude) setMarker(e.latitude, e.longitude);
+      else if (marker) { map.removeLayer(marker); marker = null; }
+
+      document.getElementById('formTitle').innerHTML = '<i data-lucide="edit"></i> Edit Event';
+      document.getElementById('formBtn').innerHTML = '<i data-lucide="save"></i> Save Changes';
+      document.getElementById('cancelBtn').classList.remove('hidden');
+      lucide.createIcons();
+      document.getElementById('fName').focus();
+    }
+
+    function cancelEdit() {
+      document.getElementById('editId').value = '';
+      $form.reset();
+      if (marker) { map.removeLayer(marker); marker = null; }
+      document.getElementById('formTitle').innerHTML = '<i data-lucide="plus-circle"></i> New Event';
+      document.getElementById('formBtn').innerHTML = '<i data-lucide="plus"></i> Create Event';
+      document.getElementById('cancelBtn').classList.add('hidden');
+      lucide.createIcons();
+    }
+
+    // ── Load & Render ────────────────────────────────
+    let allEvents = [];
+    async function loadEvents() {
+      allEvents = await DB.getEvents();
+      if (!allEvents.length) {
+        const msg = Auth.isSuperuser()
+          ? 'Create your first event below to get started.'
+          : 'You have not been assigned to any events yet. Ask a superuser for access.';
+        $list.innerHTML = `<div class="empty-state"><i data-lucide="calendar"></i><h3>No events yet</h3><p>${msg}</p></div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      const canDelete = Auth.isSuperuser();
+      $list.innerHTML = allEvents.map(e => {
+        const badgeClass = e.status === 'active' ? 'badge-green' : e.status === 'closed' ? 'badge-gray' : 'badge-purple';
+        const statusLabel = e.status.charAt(0).toUpperCase() + e.status.slice(1);
+
+        let details = '';
+        if (e.start_time || e.end_time) details += `<span class="tag">${(e.start_time||'').slice(0,5) || '?'} – ${(e.end_time||'').slice(0,5) || '?'}</span>`;
+        if (e.temperature !== null && e.temperature !== undefined) details += `<span class="tag">${e.temperature}&deg;C</span>`;
+        if (e.weather) details += `<span class="tag">${weatherLabels[e.weather] || e.weather}</span>`;
+        if (e.crowd) details += `<span class="tag">${crowdLabels[e.crowd] || e.crowd}</span>`;
+
+        let actions = '';
+        if (e.status === 'active') {
+          actions += `<button class="btn btn-sm btn-ghost" onclick="deactivate('${e.id}')"><i data-lucide="pause"></i> Deactivate</button>`;
+        } else {
+          actions += `<button class="btn btn-sm btn-success" onclick="activate('${e.id}','${esc(e.name)}')"><i data-lucide="play"></i> Activate</button>`;
+        }
+        actions += `<button class="btn btn-sm btn-ghost" onclick="editEvent('${e.id}')"><i data-lucide="edit"></i></button>`;
+        if (canDelete) {
+          actions += `<button class="btn btn-sm btn-danger" onclick="del('${e.id}')"><i data-lucide="trash-2"></i></button>`;
+        }
+
+        return `
+          <div class="event-card">
+            <div class="event-info">
+              <div class="event-name">${esc(e.name)}</div>
+              <div class="event-date">${e.date || 'No date'} &nbsp;<span class="badge ${badgeClass}">${statusLabel}</span></div>
+              ${details ? `<div class="event-detail">${details}</div>` : ''}
+            </div>
+            <div class="event-actions">${actions}</div>
+          </div>`;
+      }).join('');
+      lucide.createIcons();
+    }
+
+    function editEvent(id) {
+      const e = allEvents.find(ev => ev.id === id);
+      if (e) fillForm(e);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // ── Submit (create or update) ────────────────────
+    $form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const fields = getFormData();
+      if (!fields.name) return;
+
+      const btn = document.getElementById('formBtn');
+      btn.disabled = true;
+
+      const editId = document.getElementById('editId').value;
+      let error;
+      if (editId) {
+        ({ error } = await DB.updateEvent(editId, fields));
+      } else {
+        ({ error } = await DB.createEvent(fields));
+      }
+
+      btn.disabled = false;
+      if (error) { toast(error.message, 'err'); return; }
+
+      toast(editId ? 'Event updated' : 'Event created');
+      cancelEdit();
+      loadEvents();
+    });
+
+    // ── Actions ──────────────────────────────────────
+    async function activate(id, name) {
+      const events = await DB.getEvents();
+      for (const e of events) {
+        if (e.status === 'active' && e.id !== id) {
+          await DB.updateEventStatus(e.id, 'closed');
+        }
+      }
+      await DB.updateEventStatus(id, 'active');
+      Ctx.set(id, name, 'active');
+      toast('Event activated');
+      renderNav('events');
+      loadEvents();
+    }
+
+    async function deactivate(id) {
+      await DB.updateEventStatus(id, 'closed');
+      if (Ctx.id() === id) Ctx.clear();
+      toast('Event deactivated');
+      renderNav('events');
+      loadEvents();
+    }
+
+    async function del(id) {
+      if (!confirm('Delete this event and all its data?')) return;
+      const { error } = await DB.deleteEvent(id);
+      if (error) { toast(error.message, 'err'); return; }
+      if (Ctx.id() === id) Ctx.clear();
+      toast('Event deleted');
+      renderNav('events');
+      loadEvents();
+    }
+
+    // ── Init (auth-gated) ──────────────────────────
+    (async () => {
+      if (!(await Auth.require())) return;
+      renderNav('events');
+      // Only superusers can create events; admins can only edit/activate their assigned ones.
+      if (Auth.isSuperuser()) {
+        document.getElementById('eventFormCard').style.display = '';
+        setTimeout(() => map.invalidateSize(), 300);
+      }
+      loadEvents();
+    })();
+  </script>
+</body>
+</html>

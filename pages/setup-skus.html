@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockFest — Products</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    * { touch-action: manipulation; }
+    .sku-list { list-style: none; padding: 0; margin: 0; }
+    .sku-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(18,24,40,.97);
+      transition: background .12s, box-shadow .15s, transform .15s;
+      cursor: grab;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    .sku-row:last-child { border-bottom: none; }
+    .sku-row:hover { background: rgba(255,255,255,.03); }
+    .sku-row.dragging {
+      opacity: .85;
+      box-shadow: 0 8px 24px rgba(0,0,0,.4), 0 0 0 1px var(--accent);
+      z-index: 10;
+      cursor: grabbing;
+      border-radius: 8px;
+    }
+    .sku-row.drag-over {
+      border-top: 2px solid var(--accent);
+    }
+    .drag-handle {
+      color: var(--text4);
+      flex-shrink: 0;
+      cursor: grab;
+      display: flex;
+      align-items: center;
+    }
+    .drag-handle svg { width: 16px; height: 16px; }
+    .sku-order {
+      font-size: 11px;
+      color: var(--text4);
+      width: 22px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .sku-name {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sku-unit { flex-shrink: 0; }
+    .sku-del { flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main">
+      <div class="page-header">
+        <h1>Products (SKUs)</h1>
+        <p>Drag to reorder. This order is used across Sales, Overview, Counts, and Reports.</p>
+      </div>
+      <div class="page-body">
+        <div class="card mb-6">
+          <div class="card-title"><i data-lucide="plus-circle"></i> Add Product</div>
+          <form id="addForm" class="form-row" style="align-items:flex-end; gap:10px;">
+            <div class="form-group" style="flex:2; margin-bottom:0;">
+              <label>Product Name</label>
+              <input type="text" id="skuName" placeholder="e.g. Heineken 33cl" required>
+            </div>
+            <div class="form-group" style="flex:1; margin-bottom:0;">
+              <label>Unit</label>
+              <select id="skuUnit">
+                <option value="liters">Liters</option>
+                <option value="tray">Tray</option>
+                <option value="bottle">Bottle</option>
+                <option value="box">Box</option>
+              </select>
+            </div>
+            <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Add</button>
+          </form>
+        </div>
+
+        <div id="skuList"></div>
+      </div>
+    </div>
+    <nav class="bottombar" id="bottombar"></nav>
+  </div>
+
+  <script src="/js/supabase.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/db.js"></script>
+  <script>
+    let skus = [];
+    let dragSrcId = null;
+
+    async function loadSkus() {
+      skus = await DB.getSkus();
+      render();
+    }
+
+    function render() {
+      const $list = document.getElementById('skuList');
+
+      if (!skus.length) {
+        $list.innerHTML = `<div class="empty-state"><i data-lucide="package"></i><h3>No products yet</h3><p>Add your first product above.</p></div>`;
+        lucide.createIcons();
+        return;
+      }
+
+      $list.innerHTML = `
+        <div class="card">
+          <div class="card-title"><i data-lucide="package"></i> ${skus.length} Product${skus.length > 1 ? 's' : ''}</div>
+          <div class="sku-list" id="skuSortable">
+            ${skus.map((s, i) => `
+              <div class="sku-row" draggable="true" data-id="${s.id}">
+                <div class="drag-handle"><i data-lucide="grip-vertical"></i></div>
+                <div class="sku-order">${i + 1}</div>
+                <div class="sku-name">${esc(s.name)}</div>
+                <div class="sku-unit"><span class="badge badge-blue">${esc(s.unit)}</span></div>
+                <div class="sku-del">
+                  <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); delSku('${s.id}')"><i data-lucide="trash-2"></i></button>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>`;
+      lucide.createIcons();
+      initDrag();
+    }
+
+    // ── Drag & Drop ─────────────────────────────────
+    function initDrag() {
+      const rows = document.querySelectorAll('.sku-row[draggable]');
+      rows.forEach(row => {
+        row.addEventListener('dragstart', onDragStart);
+        row.addEventListener('dragend', onDragEnd);
+        row.addEventListener('dragover', onDragOver);
+        row.addEventListener('dragenter', onDragEnter);
+        row.addEventListener('dragleave', onDragLeave);
+        row.addEventListener('drop', onDrop);
+
+        // Touch support
+        row.addEventListener('touchstart', onTouchStart, { passive: false });
+        row.addEventListener('touchmove', onTouchMove, { passive: false });
+        row.addEventListener('touchend', onTouchEnd);
+      });
+    }
+
+    function onDragStart(e) {
+      dragSrcId = e.currentTarget.dataset.id;
+      e.currentTarget.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function onDragEnd(e) {
+      e.currentTarget.classList.remove('dragging');
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    }
+
+    function onDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+    }
+
+    function onDragEnter(e) {
+      e.preventDefault();
+      const row = e.currentTarget;
+      if (row.dataset.id !== dragSrcId) row.classList.add('drag-over');
+    }
+
+    function onDragLeave(e) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    async function onDrop(e) {
+      e.preventDefault();
+      const targetId = e.currentTarget.dataset.id;
+      e.currentTarget.classList.remove('drag-over');
+      if (!dragSrcId || dragSrcId === targetId) return;
+
+      // Reorder in local array
+      const fromIdx = skus.findIndex(s => s.id === dragSrcId);
+      const toIdx = skus.findIndex(s => s.id === targetId);
+      const [moved] = skus.splice(fromIdx, 1);
+      skus.splice(toIdx, 0, moved);
+
+      render();
+      await DB.reorderSkus(skus.map(s => s.id));
+      dragSrcId = null;
+    }
+
+    // ── Touch drag support ──────────────────────────
+    let touchRow = null, touchClone = null, touchStartY = 0;
+
+    function onTouchStart(e) {
+      // Only drag from the handle area
+      const handle = e.target.closest('.drag-handle');
+      if (!handle) return;
+
+      e.preventDefault();
+      touchRow = e.currentTarget;
+      dragSrcId = touchRow.dataset.id;
+      touchStartY = e.touches[0].clientY;
+
+      touchClone = touchRow.cloneNode(true);
+      touchClone.style.position = 'fixed';
+      touchClone.style.left = touchRow.getBoundingClientRect().left + 'px';
+      touchClone.style.width = touchRow.offsetWidth + 'px';
+      touchClone.style.top = touchRow.getBoundingClientRect().top + 'px';
+      touchClone.style.zIndex = '9999';
+      touchClone.style.opacity = '.85';
+      touchClone.style.boxShadow = '0 8px 24px rgba(0,0,0,.4), 0 0 0 1px var(--accent)';
+      touchClone.style.borderRadius = '8px';
+      touchClone.style.pointerEvents = 'none';
+      document.body.appendChild(touchClone);
+
+      touchRow.style.opacity = '.3';
+    }
+
+    function onTouchMove(e) {
+      if (!touchClone) return;
+      e.preventDefault();
+
+      const y = e.touches[0].clientY;
+      const deltaY = y - touchStartY;
+      const origTop = touchRow.getBoundingClientRect().top;
+      touchClone.style.top = (origTop + deltaY) + 'px';
+
+      // Highlight target
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      const target = document.elementFromPoint(e.touches[0].clientX, y);
+      const targetRow = target?.closest('.sku-row[draggable]');
+      if (targetRow && targetRow.dataset.id !== dragSrcId) {
+        targetRow.classList.add('drag-over');
+      }
+    }
+
+    async function onTouchEnd(e) {
+      if (!touchClone) return;
+
+      // Find drop target
+      document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+      const lastTouch = e.changedTouches[0];
+      const target = document.elementFromPoint(lastTouch.clientX, lastTouch.clientY);
+      const targetRow = target?.closest('.sku-row[draggable]');
+
+      touchRow.style.opacity = '';
+      touchClone.remove();
+      touchClone = null;
+
+      if (targetRow && targetRow.dataset.id !== dragSrcId) {
+        const fromIdx = skus.findIndex(s => s.id === dragSrcId);
+        const toIdx = skus.findIndex(s => s.id === targetRow.dataset.id);
+        const [moved] = skus.splice(fromIdx, 1);
+        skus.splice(toIdx, 0, moved);
+
+        render();
+        await DB.reorderSkus(skus.map(s => s.id));
+      }
+
+      touchRow = null;
+      dragSrcId = null;
+    }
+
+    // ── Add / Delete ────────────────────────────────
+    document.getElementById('addForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const name = document.getElementById('skuName').value.trim();
+      const unit = document.getElementById('skuUnit').value;
+      if (!name) return;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      const { error } = await DB.createSku(name, unit);
+      btn.disabled = false;
+      if (error) { toast(error.message, 'err'); return; }
+      toast('Product added');
+      document.getElementById('skuName').value = '';
+      loadSkus();
+    });
+
+    async function delSku(id) {
+      if (!confirm('Delete this product?')) return;
+      const { error } = await DB.deleteSku(id);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('Product deleted');
+      loadSkus();
+    }
+
+    (async () => {
+      if (!(await Auth.require())) return;
+      renderNav('skus');
+      loadSkus();
+    })();
+  </script>
+</body>
+</html>

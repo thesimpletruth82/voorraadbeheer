@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StockFest — Closing Count</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+  <div class="app">
+    <nav class="sidebar" id="sidebar"></nav>
+    <div class="main">
+      <div class="page-header">
+        <h1>Closing Count</h1>
+        <p>Enter end-of-day stock quantities. Expected values are shown for reference.</p>
+      </div>
+      <div class="page-body">
+        <div id="noEvent" class="empty-state hidden">
+          <i data-lucide="alert-circle"></i>
+          <h3>No active event</h3>
+          <p>Select or activate an event on the <a href="/">Events page</a> first.</p>
+        </div>
+
+        <div id="content" class="hidden">
+          <div class="tab-bar" id="tabs"></div>
+          <div id="countArea"></div>
+        </div>
+      </div>
+    </div>
+    <nav class="bottombar" id="bottombar"></nav>
+  </div>
+
+  <script src="/js/supabase.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/db.js"></script>
+  <script>
+    let eventId;
+    (async () => {
+      if (!(await Auth.require())) return;
+      renderNav('closing');
+      eventId = await Ctx.ensure();
+      renderNav('closing');
+      if (!eventId) {
+        document.getElementById('noEvent').classList.remove('hidden');
+      } else {
+        document.getElementById('content').classList.remove('hidden');
+        init();
+      }
+    })();
+
+    let locations = [], skus = [], closingMap = {}, expectedStock = {}, activeLocId = null;
+
+    async function init() {
+      [locations, skus, closingMap, expectedStock] = await Promise.all([
+        DB.getLocations(eventId),
+        DB.getSkus(),
+        DB.getCountMap(eventId, 'closing'),
+        DB.computeCurrentStock(eventId),
+      ]);
+
+      if (!locations.length || !skus.length) {
+        document.getElementById('countArea').innerHTML = `
+          <div class="empty-state">
+            <i data-lucide="clipboard-check"></i>
+            <h3>Setup required</h3>
+            <p>${!locations.length ? 'Add <a href="/pages/setup-locations.html">locations</a> first.' : 'Add <a href="/pages/setup-skus.html">products</a> first.'}</p>
+          </div>`;
+        document.getElementById('tabs').innerHTML = '';
+        lucide.createIcons();
+        return;
+      }
+
+      renderTabs();
+      selectTab(locations[0].id);
+    }
+
+    function renderTabs() {
+      document.getElementById('tabs').innerHTML = locations.map(l =>
+        `<button class="tab-btn" data-id="${l.id}" onclick="selectTab('${l.id}')">${esc(l.name)}</button>`
+      ).join('');
+    }
+
+    function selectTab(locId) {
+      activeLocId = locId;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.id === locId));
+      renderCount();
+    }
+
+    function renderCount() {
+      const locCounts = closingMap[activeLocId] || {};
+      const locExpected = expectedStock[activeLocId] || {};
+      const $area = document.getElementById('countArea');
+
+      $area.innerHTML = `
+        <div class="card">
+          ${skus.map(s => {
+            const exp = locExpected[s.id] || 0;
+            const val = locCounts[s.id] ?? '';
+            return `
+              <div class="count-row">
+                <div style="flex:1; min-width:0;">
+                  <div class="count-sku">${esc(s.name)}</div>
+                  <div class="count-expected">Expected: <strong>${exp}</strong> ${esc(s.unit)}</div>
+                </div>
+                <div class="stepper">
+                  <button type="button" class="stepper-btn" onclick="step('${s.id}',-1)">−</button>
+                  <input type="number" id="qty-${s.id}" value="${val}" min="0" placeholder="—" onchange="update('${s.id}', this.value)">
+                  <button type="button" class="stepper-btn" onclick="step('${s.id}',1)">+</button>
+                </div>
+              </div>`;
+          }).join('')}
+          <div style="padding:12px; text-align:right;">
+            <button class="btn btn-success" onclick="saveAll()"><i data-lucide="save"></i> Save Counts</button>
+          </div>
+        </div>`;
+      lucide.createIcons();
+    }
+
+    function step(skuId, delta) {
+      const input = document.getElementById('qty-' + skuId);
+      const cur = parseInt(input.value) || 0;
+      const val = Math.max(0, cur + delta);
+      input.value = val;
+      update(skuId, val);
+    }
+
+    function update(skuId, val) {
+      if (!closingMap[activeLocId]) closingMap[activeLocId] = {};
+      closingMap[activeLocId][skuId] = Math.max(0, parseInt(val) || 0);
+    }
+
+    async function saveAll() {
+      const locCounts = closingMap[activeLocId] || {};
+      const promises = skus.map(s =>
+        DB.saveCount(eventId, activeLocId, s.id, locCounts[s.id] || 0, 'closing')
+      );
+      const results = await Promise.all(promises);
+      const err = results.find(r => r.error);
+      if (err) { toast(err.error.message, 'err'); return; }
+      toast('Closing counts saved');
+    }
+
+    init();
+  </script>
+</body>
+</html>
