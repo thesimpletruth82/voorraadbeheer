@@ -119,7 +119,7 @@ CREATE TABLE event_assignments (
 CREATE TABLE invites (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email         TEXT NOT NULL,
-  platform_role TEXT NOT NULL CHECK (platform_role IN ('admin', 'runner')),
+  platform_role TEXT NOT NULL CHECK (platform_role IN ('superuser', 'admin', 'runner')),
   event_id      UUID REFERENCES events(id) ON DELETE CASCADE,
   token         TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
   invited_by    UUID REFERENCES auth.users(id) ON DELETE SET NULL,

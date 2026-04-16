@@ -69,6 +69,7 @@
               <div class="form-group" style="flex: 1; margin-bottom: 0;">
                 <label>Role</label>
                 <select id="iRole" class="role-select" style="padding: 8px 10px; width: 100%;">
+                  <option value="superuser">Superuser</option>
                   <option value="admin">Admin</option>
                   <option value="runner" selected>Runner</option>
                 </select>
@@ -250,7 +251,18 @@
       lucide.createIcons();
     }
 
+    function isLastSuperuser(userId) {
+      const target = allUsers.find(u => u.id === userId);
+      if (target?.platform_role !== 'superuser') return false;
+      return allUsers.filter(u => u.platform_role === 'superuser').length <= 1;
+    }
+
     async function changeRole(userId, newRole) {
+      if (newRole !== 'superuser' && isLastSuperuser(userId)) {
+        toast('Cannot demote the last superuser — promote someone else first', 'err');
+        await loadAll();
+        return;
+      }
       const { error } = await DB.updatePlatformRole(userId, newRole);
       if (error) { toast(error.message, 'err'); return; }
       toast('Role updated');
@@ -258,6 +270,10 @@
     }
 
     async function removeUser(userId) {
+      if (isLastSuperuser(userId)) {
+        toast('Cannot remove the last superuser — promote someone else first', 'err');
+        return;
+      }
       if (!confirm('Remove this user? Their auth account remains in Supabase — delete it from the dashboard if you want to fully remove them.')) return;
       const { error } = await DB.deleteProfile(userId);
       if (error) { toast(error.message, 'err'); return; }
