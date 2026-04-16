@@ -280,24 +280,29 @@ CREATE POLICY "skus_admin_write" ON skus FOR ALL USING (
 
 -- stock_counts -----------------------------------------------
 CREATE POLICY "counts_read" ON stock_counts FOR SELECT USING (has_event_access(event_id));
+-- Admin/superuser: full control (update, delete, insert)
 CREATE POLICY "counts_admin_write" ON stock_counts FOR ALL USING (
   is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
 ) WITH CHECK (
   is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
 );
+-- Runner: can insert opening/closing counts on their events
+CREATE POLICY "counts_runner_insert" ON stock_counts FOR INSERT WITH CHECK (
+  current_platform_role() = 'runner'
+  AND has_event_access(event_id)
+);
 
 -- movements --------------------------------------------------
 CREATE POLICY "movements_read" ON movements FOR SELECT USING (has_event_access(event_id));
--- Admin: all operations on their events
+-- Admin/superuser: all operations on their events
 CREATE POLICY "movements_admin_all" ON movements FOR ALL USING (
   is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
 ) WITH CHECK (
   is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
 );
--- Runner: can only insert sale-type movements on their events
-CREATE POLICY "movements_runner_sales" ON movements FOR INSERT WITH CHECK (
+-- Runner: can insert any movement type on their events
+CREATE POLICY "movements_runner_insert" ON movements FOR INSERT WITH CHECK (
   current_platform_role() = 'runner'
-  AND type = 'sale'
   AND has_event_access(event_id)
 );
 

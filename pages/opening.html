@@ -38,7 +38,7 @@
   <script>
     let eventId;
     (async () => {
-      if (!(await Auth.require())) return;
+      if (!(await Auth.require({ allowRunner: true }))) return;
       renderNav('opening');
       eventId = await Ctx.ensure();
       renderNav('opening');

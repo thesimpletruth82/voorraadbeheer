@@ -87,7 +87,7 @@
   <script>
     let eventId;
     (async () => {
-      if (!(await Auth.require())) return;
+      if (!(await Auth.require({ allowRunner: true }))) return;
       renderNav('movement');
       eventId = await Ctx.ensure();
       renderNav('movement');
