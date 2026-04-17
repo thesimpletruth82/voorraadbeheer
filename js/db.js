@@ -18,6 +18,11 @@ const DB = {
     const { error } = await sb().from('events').update({ status }).eq('id', id);
     return { error };
   },
+  // Atomically close all other active events and activate this one.
+  async setActiveEvent(eventId) {
+    const { error } = await sb().rpc('set_active_event', { p_event_id: eventId });
+    return { error };
+  },
   async deleteEvent(id) {
     const { error } = await sb().from('events').delete().eq('id', id);
     return { error };
@@ -61,7 +66,16 @@ const DB = {
   // Create a brand-new SKU and add it to the event's assortment.
   // If a SKU with the same name already exists in the catalog, reuse it.
   async createSku(eventId, name, unit) {
-    let { data: existing } = await sb().from('skus').select('id').ilike('name', name).maybeSingle();
+    // Use eq() (case-sensitive) to avoid treating user input like '%' or '_'
+    // as SQL wildcards. For a case-insensitive match use lower().
+    let { data: existing } = await sb().from('skus').select('id')
+      .eq('name', name).maybeSingle();
+    // Fallback: also try a case-insensitive exact match
+    if (!existing) {
+      const { data: ci } = await sb().from('skus').select('id')
+        .ilike('name', name.replace(/%/g, '\\%').replace(/_/g, '\\_')).maybeSingle();
+      existing = ci;
+    }
     let skuId;
     if (!existing) {
       const { data: newSku, error } = await sb().from('skus').insert({ name, unit }).select().single();
@@ -84,7 +98,20 @@ const DB = {
     return { error };
   },
   // Remove a SKU from an event's assortment (does NOT delete it from the catalog).
+  // Blocks removal if the product has movement/count history in this event to
+  // prevent orphaned data confusion.
   async removeSkuFromEvent(eventId, skuId) {
+    const [{ data: move }, { data: count }] = await Promise.all([
+      sb().from('movements').select('id').eq('event_id', eventId).eq('sku_id', skuId).limit(1).maybeSingle(),
+      sb().from('stock_counts').select('id').eq('event_id', eventId).eq('sku_id', skuId).limit(1).maybeSingle(),
+    ]);
+    if (move || count) {
+      return {
+        error: {
+          message: 'This product has history in the current event and cannot be removed. It will no longer appear in new counts, but historical data is preserved.',
+        },
+      };
+    }
     const { error } = await sb().from('event_skus')
       .delete().eq('event_id', eventId).eq('sku_id', skuId);
     return { error };
@@ -123,14 +150,15 @@ const DB = {
       .eq('type', type)
       .maybeSingle();
 
+    const userId = (typeof Auth !== 'undefined' && Auth.user) ? Auth.user.id : null;
     if (existing) {
       const { error } = await s.from('stock_counts')
-        .update({ quantity, counted_at: new Date().toISOString() })
+        .update({ quantity, counted_at: new Date().toISOString(), counted_by: userId })
         .eq('id', existing.id);
       return { error };
     } else {
       const { error } = await s.from('stock_counts')
-        .insert({ event_id: eventId, location_id: locationId, sku_id: skuId, quantity, type });
+        .insert({ event_id: eventId, location_id: locationId, sku_id: skuId, quantity, type, counted_by: userId });
       return { error };
     }
   },
@@ -147,6 +175,7 @@ const DB = {
   },
 
   async createMovement({ eventId, fromLocationId, toLocationId, skuId, quantity, type, notes }) {
+    const userId = (typeof Auth !== 'undefined' && Auth.user) ? Auth.user.id : null;
     const { data, error } = await sb().from('movements').insert({
       event_id:         eventId,
       from_location_id: fromLocationId || null,
@@ -155,6 +184,7 @@ const DB = {
       quantity:         Number(quantity),
       type,
       notes:            notes || null,
+      created_by:       userId,
     }).select().single();
     return { data, error };
   },
@@ -311,6 +341,11 @@ const DB = {
     // This only deletes from profiles — the auth.users row stays unless
     // the superuser removes it in the Supabase dashboard.
     const { error } = await sb().from('profiles').delete().eq('id', userId);
+    return { error };
+  },
+  // Approve a pending user (set status = 'active').
+  async approveUser(userId) {
+    const { error } = await sb().from('profiles').update({ status: 'active' }).eq('id', userId);
     return { error };
   },
 

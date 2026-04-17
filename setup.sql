@@ -90,7 +90,8 @@ CREATE TABLE stock_counts (
   sku_id      UUID NOT NULL REFERENCES skus(id) ON DELETE CASCADE,
   quantity    NUMERIC NOT NULL DEFAULT 0,
   type        TEXT NOT NULL CHECK (type IN ('opening', 'closing')),
-  counted_at  TIMESTAMPTZ DEFAULT NOW()
+  counted_at  TIMESTAMPTZ DEFAULT NOW(),
+  counted_by  UUID REFERENCES auth.users(id) ON DELETE SET NULL
 );
 
 -- Movements (transfers / deliveries / sales) -----------------
@@ -103,7 +104,8 @@ CREATE TABLE movements (
   quantity         NUMERIC NOT NULL CHECK (quantity > 0),
   type             TEXT NOT NULL CHECK (type IN ('transfer', 'delivery', 'sale')),
   moved_at         TIMESTAMPTZ DEFAULT NOW(),
-  notes            TEXT
+  notes            TEXT,
+  created_by       UUID REFERENCES auth.users(id) ON DELETE SET NULL
 );
 
 
@@ -116,6 +118,8 @@ CREATE TABLE profiles (
   full_name     TEXT,
   platform_role TEXT NOT NULL DEFAULT 'runner'
                 CHECK (platform_role IN ('superuser', 'admin', 'runner')),
+  status        TEXT NOT NULL DEFAULT 'active'
+                CHECK (status IN ('active', 'pending')),
   created_at    TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -136,12 +140,18 @@ CREATE TABLE invites (
   token         TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
   invited_by    UUID REFERENCES auth.users(id) ON DELETE SET NULL,
   created_at    TIMESTAMPTZ DEFAULT NOW(),
-  accepted_at   TIMESTAMPTZ
+  accepted_at   TIMESTAMPTZ,
+  expires_at    TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days')
 );
 
 CREATE INDEX ON invites(email);
 CREATE INDEX ON invites(token);
 CREATE INDEX ON event_assignments(user_id);
+
+-- Performance indexes
+CREATE INDEX ON movements(event_id, moved_at DESC);
+CREATE INDEX ON movements(event_id);
+CREATE INDEX ON stock_counts(event_id, location_id, sku_id, type);
 
 
 -- ─── 4. HELPER FUNCTIONS ────────────────────────────────────
@@ -154,7 +164,7 @@ RETURNS TEXT
 LANGUAGE SQL STABLE SECURITY DEFINER
 SET search_path = public
 AS $$
-  SELECT platform_role FROM profiles WHERE id = auth.uid();
+  SELECT platform_role FROM profiles WHERE id = auth.uid() AND status = 'active';
 $$;
 
 CREATE OR REPLACE FUNCTION is_superuser()
@@ -170,6 +180,7 @@ $$;
 
 -- Runners implicitly have access to whichever event is currently 'active'.
 -- Admins/superusers keep their existing assignment-based access.
+-- Pending (uninvited) profiles have NO access anywhere.
 CREATE OR REPLACE FUNCTION has_event_access(_event_id UUID)
 RETURNS BOOLEAN
 LANGUAGE SQL STABLE SECURITY DEFINER
@@ -177,15 +188,45 @@ SET search_path = public
 AS $$
   SELECT
     is_superuser()
-    OR EXISTS (
-      SELECT 1 FROM event_assignments
-      WHERE event_id = _event_id AND user_id = auth.uid()
-    )
     OR (
-      current_platform_role() = 'runner'
-      AND EXISTS (SELECT 1 FROM events WHERE id = _event_id AND status = 'active')
+      EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND status = 'active')
+      AND (
+        EXISTS (
+          SELECT 1 FROM event_assignments
+          WHERE event_id = _event_id AND user_id = auth.uid()
+        )
+        OR (
+          current_platform_role() = 'runner'
+          AND EXISTS (SELECT 1 FROM events WHERE id = _event_id AND status = 'active')
+        )
+      )
     );
 $$;
+
+
+-- ─── 4b. ATOMIC EVENT ACTIVATION ────────────────────────────
+-- Closes all currently active events and activates the target in
+-- a single transaction. Prevents the gap that exists when client
+-- code runs two UPDATE statements sequentially.
+CREATE OR REPLACE FUNCTION set_active_event(p_event_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NOT (is_superuser() OR current_platform_role() = 'admin') THEN
+    RAISE EXCEPTION 'Unauthorized: only superusers and admins can activate events';
+  END IF;
+
+  UPDATE events SET status = 'closed'
+    WHERE status = 'active' AND id != p_event_id;
+
+  UPDATE events SET status = 'active'
+    WHERE id = p_event_id;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION set_active_event(UUID) TO authenticated;
 
 
 -- ─── 5. SIGNUP TRIGGER ──────────────────────────────────────
@@ -201,23 +242,31 @@ SET search_path = public
 AS $$
 DECLARE
   _role   TEXT := 'runner';
+  _status TEXT := 'pending';
   _invite invites%ROWTYPE;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM profiles WHERE platform_role = 'superuser') THEN
-    _role := 'superuser';
+    -- First user ever → superuser, immediately active
+    _role   := 'superuser';
+    _status := 'active';
   ELSE
     SELECT * INTO _invite FROM invites
       WHERE LOWER(email) = LOWER(NEW.email)
         AND accepted_at IS NULL
+        AND (expires_at IS NULL OR expires_at > NOW())
       ORDER BY created_at DESC
       LIMIT 1;
     IF FOUND THEN
-      _role := _invite.platform_role;
+      _role   := _invite.platform_role;
+      _status := 'active';
     END IF;
+    -- No matching / valid invite → runner with status=pending
+    -- (blocked from all event data until a superuser approves)
   END IF;
 
-  INSERT INTO profiles (id, email, platform_role)
-  VALUES (NEW.id, NEW.email, _role);
+  INSERT INTO profiles (id, email, platform_role, status)
+  VALUES (NEW.id, NEW.email, _role, _status)
+  ON CONFLICT (id) DO NOTHING;
 
   IF _invite.id IS NOT NULL THEN
     IF _invite.event_id IS NOT NULL THEN
@@ -324,11 +373,12 @@ CREATE POLICY "movements_admin_all" ON movements FOR ALL USING (
 ) WITH CHECK (
   is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
 );
--- Runner: can only insert sale-type movements on their events
+-- Runner: can only insert sale-type movements, and only attributed to themselves
 CREATE POLICY "movements_runner_sales" ON movements FOR INSERT WITH CHECK (
   current_platform_role() = 'runner'
   AND type = 'sale'
   AND has_event_access(event_id)
+  AND (created_by IS NULL OR created_by = auth.uid())
 );
 
 

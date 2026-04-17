@@ -38,6 +38,7 @@ const Auth = {
   isSuperuser() { return this.role() === 'superuser'; },
   isAdmin()     { return this.role() === 'admin'; },
   isRunner()    { return this.role() === 'runner'; },
+  isPending()   { return this.profile?.status === 'pending'; },
   signedIn()    { return !!this.user; },
 
   // Page-level guard. Call once near the top of each page.
@@ -59,6 +60,13 @@ const Auth = {
       if (!opts.silent) {
         await sb().auth.signOut();
         location.replace('/login');
+      }
+      return false;
+    }
+    if (this.isPending()) {
+      // Account created but not yet approved by a superuser.
+      if (!opts.silent && location.pathname !== '/signup') {
+        location.replace('/signup');
       }
       return false;
     }

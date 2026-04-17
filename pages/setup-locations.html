@@ -25,7 +25,7 @@
 
         <div id="content" class="hidden">
           <!-- Quick-add from previously used locations -->
-          <div class="card mb-6" id="previousCard" class="hidden">
+          <div class="card mb-6 hidden" id="previousCard">
             <div class="card-title"><i data-lucide="clock"></i> Previously Used</div>
             <div id="previousLocs" style="display:flex; flex-wrap:wrap; gap:6px;"></div>
           </div>
@@ -154,7 +154,7 @@
     }
 
     async function delLoc(id) {
-      if (!confirm('Delete this location?')) return;
+      if (!confirm('Delete this location?\n\nThis will permanently erase all stock counts and movement history recorded for this location. This cannot be undone.')) return;
       const { error } = await DB.deleteLocation(id);
       if (error) { toast(error.message, 'err'); return; }
       toast('Location deleted');

@@ -220,7 +220,9 @@
     async function init() {
       await refresh();
       setupRealtime();
-      setInterval(refresh, 30000);
+      // No setInterval — realtime subscription handles live updates.
+      // A single debounce timer prevents two rapid back-to-back refreshes
+      // when both the movements and stock_counts channels fire together.
     }
 
     async function refresh() {
@@ -580,6 +582,12 @@
     }
 
     // ── Realtime ───────────────────────────────────────
+    let _refreshTimer = null;
+    function debouncedRefresh() {
+      clearTimeout(_refreshTimer);
+      _refreshTimer = setTimeout(refresh, 400);
+    }
+
     function setupRealtime() {
       sb().channel('overview-movements')
         .on('postgres_changes', {
@@ -587,7 +595,7 @@
           schema: 'public',
           table: 'movements',
           filter: `event_id=eq.${eventId}`,
-        }, () => refresh())
+        }, debouncedRefresh)
         .subscribe();
 
       sb().channel('overview-counts')
@@ -596,7 +604,7 @@
           schema: 'public',
           table: 'stock_counts',
           filter: `event_id=eq.${eventId}`,
-        }, () => refresh())
+        }, debouncedRefresh)
         .subscribe();
     }
   </script>

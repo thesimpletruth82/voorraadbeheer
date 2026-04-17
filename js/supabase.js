@@ -14,6 +14,7 @@ const Ctx = {
     localStorage.setItem('sf_eid', id);
     localStorage.setItem('sf_ename', name);
     localStorage.setItem('sf_estatus', status);
+    localStorage.setItem('sf_ets', String(Date.now()));
   },
   id()     { return localStorage.getItem('sf_eid'); },
   name()   { return localStorage.getItem('sf_ename'); },
@@ -22,14 +23,22 @@ const Ctx = {
     localStorage.removeItem('sf_eid');
     localStorage.removeItem('sf_ename');
     localStorage.removeItem('sf_estatus');
+    localStorage.removeItem('sf_ets');
   },
   // Auto-detect: if nothing in localStorage, fetch the active event from DB.
-  // Runners are always pinned to whichever event is currently active — we
-  // ignore their cached context so they follow along when a superuser/admin
-  // switches which event is live.
+  // Runners always follow whichever event is active. Their cached value is
+  // reused for up to 30 s to avoid a DB round-trip on every page load; after
+  // that it re-fetches so they automatically pick up event switches.
   async ensure() {
     const isRunner = typeof Auth !== 'undefined' && Auth.isRunner && Auth.isRunner();
     if (!isRunner && Ctx.id()) return Ctx.id();
+
+    // Runners: honour cache if it is less than 30 seconds old
+    if (isRunner && Ctx.id()) {
+      const ts = parseInt(localStorage.getItem('sf_ets') || '0');
+      if (Date.now() - ts < 30_000) return Ctx.id();
+    }
+
     const { data } = await sb().from('events').select('*').eq('status', 'active').limit(1).maybeSingle();
     if (data) {
       Ctx.set(data.id, data.name, data.status);

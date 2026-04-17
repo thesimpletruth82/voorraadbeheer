@@ -69,7 +69,6 @@
               <div class="form-group" style="flex: 1; margin-bottom: 0;">
                 <label>Role</label>
                 <select id="iRole" class="role-select" style="padding: 8px 10px; width: 100%;">
-                  <option value="superuser">Superuser</option>
                   <option value="admin">Admin</option>
                   <option value="runner" selected>Runner</option>
                 </select>
@@ -95,7 +94,13 @@
           <div id="inviteList"></div>
         </div>
 
-        <!-- Users -->
+        <!-- Pending approvals -->
+        <div class="card mb-6" id="pendingCard" style="display:none;">
+          <div class="card-title"><i data-lucide="user-check"></i> Pending Approval</div>
+          <div id="pendingList"></div>
+        </div>
+
+        <!-- Active users -->
         <div class="card mb-6">
           <div class="card-title"><i data-lucide="users"></i> Users</div>
           <div id="userList"></div>
@@ -140,6 +145,7 @@
       renderInviteEventOptions();
       renderEventPicker();
       renderInvites();
+      renderPendingUsers();
       renderUsers();
       await renderEventAssignments();
     }
@@ -171,6 +177,7 @@
 
     // ── Pending invites ────────────────────────────────────
     function renderInvites() {
+      const now = new Date();
       const open = allInvites.filter(i => !i.accepted_at);
       const $list = document.getElementById('inviteList');
       if (!open.length) {
@@ -180,17 +187,25 @@
       $list.innerHTML = open.map(i => {
         const link = `${location.origin}/signup?email=${encodeURIComponent(i.email)}`;
         const eventLabel = i.event?.name ? ` · ${esc(i.event.name)}` : '';
+        const exp = i.expires_at ? new Date(i.expires_at) : null;
+        const expired = exp && exp < now;
+        const expLabel = exp
+          ? expired
+            ? `<span style="color:var(--red);font-weight:600;">Expired ${exp.toLocaleDateString()}</span>`
+            : `<span style="color:var(--text3);">Expires ${exp.toLocaleDateString()}</span>`
+          : '';
         return `
-          <div class="user-row">
+          <div class="user-row" style="${expired ? 'opacity:.5;' : ''}">
             <div class="user-info">
               <div class="user-email">${esc(i.email)}</div>
               <div class="user-sub">
                 <span class="badge badge-purple">${i.platform_role}</span>${eventLabel}
+                ${expLabel ? ` · ${expLabel}` : ''}
               </div>
-              <div class="invite-link-box" style="margin-top:6px;">
+              ${!expired ? `<div class="invite-link-box" style="margin-top:6px;">
                 <code id="link-${i.id}">${esc(link)}</code>
                 <button class="btn btn-sm btn-ghost" onclick="copyLink('${i.id}')"><i data-lucide="copy"></i> Copy</button>
-              </div>
+              </div>` : ''}
             </div>
             <div class="user-actions">
               <button class="btn btn-sm btn-danger" onclick="revokeInvite('${i.id}')">
@@ -200,6 +215,52 @@
           </div>`;
       }).join('');
       lucide.createIcons();
+    }
+
+    // ── Pending users (signed up but not yet approved) ─────
+    function renderPendingUsers() {
+      const pending = allUsers.filter(u => u.status === 'pending');
+      const $card = document.getElementById('pendingCard');
+      const $list = document.getElementById('pendingList');
+
+      if (!pending.length) {
+        $card.style.display = 'none';
+        return;
+      }
+      $card.style.display = '';
+      $list.innerHTML = pending.map(u => `
+        <div class="user-row">
+          <div class="user-info">
+            <div class="user-email">${esc(u.email)}</div>
+            <div class="user-sub">
+              <span class="badge badge-gray">Pending</span>
+              <span class="text-muted" style="font-size:11px;"> · Signed up ${new Date(u.created_at).toLocaleDateString()}</span>
+            </div>
+          </div>
+          <div class="user-actions">
+            <select class="role-select" id="pending-role-${u.id}">
+              <option value="admin">Admin</option>
+              <option value="runner" selected>Runner</option>
+            </select>
+            <button class="btn btn-sm btn-success" onclick="approveUser('${u.id}')">
+              <i data-lucide="check"></i> Approve
+            </button>
+            <button class="btn btn-sm btn-danger" onclick="removeUser('${u.id}')">
+              <i data-lucide="trash-2"></i>
+            </button>
+          </div>
+        </div>`).join('');
+      lucide.createIcons();
+    }
+
+    async function approveUser(userId) {
+      const role = document.getElementById('pending-role-' + userId)?.value || 'runner';
+      // First set the role (in case they need admin), then approve
+      await DB.updatePlatformRole(userId, role);
+      const { error } = await DB.approveUser(userId);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('User approved');
+      await loadAll();
     }
 
     function copyLink(id) {
@@ -218,14 +279,15 @@
       await loadAll();
     }
 
-    // ── Users ──────────────────────────────────────────────
+    // ── Users (active only — pending shown in their own card) ─
     function renderUsers() {
       const $list = document.getElementById('userList');
-      if (!allUsers.length) {
-        $list.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;">No users yet.</div>';
+      const active = allUsers.filter(u => u.status !== 'pending');
+      if (!active.length) {
+        $list.innerHTML = '<div class="text-muted text-sm" style="padding:8px 0;">No active users yet.</div>';
         return;
       }
-      $list.innerHTML = allUsers.map(u => {
+      $list.innerHTML = active.map(u => {
         const isSelf = u.id === Auth.user.id;
         const badgeClass = u.platform_role === 'superuser' ? 'badge-red'
                          : u.platform_role === 'admin'     ? 'badge-blue'
@@ -251,18 +313,7 @@
       lucide.createIcons();
     }
 
-    function isLastSuperuser(userId) {
-      const target = allUsers.find(u => u.id === userId);
-      if (target?.platform_role !== 'superuser') return false;
-      return allUsers.filter(u => u.platform_role === 'superuser').length <= 1;
-    }
-
     async function changeRole(userId, newRole) {
-      if (newRole !== 'superuser' && isLastSuperuser(userId)) {
-        toast('Cannot demote the last superuser — promote someone else first', 'err');
-        await loadAll();
-        return;
-      }
       const { error } = await DB.updatePlatformRole(userId, newRole);
       if (error) { toast(error.message, 'err'); return; }
       toast('Role updated');
@@ -270,10 +321,6 @@
     }
 
     async function removeUser(userId) {
-      if (isLastSuperuser(userId)) {
-        toast('Cannot remove the last superuser — promote someone else first', 'err');
-        return;
-      }
       if (!confirm('Remove this user? Their auth account remains in Supabase — delete it from the dashboard if you want to fully remove them.')) return;
       const { error } = await DB.deleteProfile(userId);
       if (error) { toast(error.message, 'err'); return; }
@@ -303,7 +350,7 @@
       const assignments = await DB.getEventAssignments(eid);
       const assigned = new Set(assignments.map(a => a.user_id));
 
-      const assignable = allUsers.filter(u => u.platform_role !== 'superuser');
+      const assignable = allUsers.filter(u => u.platform_role !== 'superuser' && u.status !== 'pending');
 
       const chips = assignments.length
         ? assignments.map(a => `

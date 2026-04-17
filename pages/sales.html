@@ -303,6 +303,21 @@
 
       if (!sales.length) { toast('Nothing to submit', 'err'); return; }
 
+      // ── Oversell check ──────────────────────────────────
+      const locStockNow = expectedStock[locId] || {};
+      const oversells = [];
+      for (const s of sales) {
+        const available = Math.round(locStockNow[s.skuId] || 0);
+        if (s.quantity > available) {
+          const sku = skus.find(x => x.id === s.skuId);
+          oversells.push(`• ${sku?.name || s.skuId}: selling ${s.quantity}, only ${available} available`);
+        }
+      }
+      if (oversells.length) {
+        const go = confirm(`⚠ Possible oversell detected:\n\n${oversells.join('\n')}\n\nSubmit anyway?`);
+        if (!go) return;
+      }
+
       const btn = document.getElementById('submitBtn');
       btn.disabled = true;
 

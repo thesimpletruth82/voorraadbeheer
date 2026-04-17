@@ -332,13 +332,9 @@
 
     // ── Actions ──────────────────────────────────────
     async function activate(id, name) {
-      const events = await DB.getEvents();
-      for (const e of events) {
-        if (e.status === 'active' && e.id !== id) {
-          await DB.updateEventStatus(e.id, 'closed');
-        }
-      }
-      await DB.updateEventStatus(id, 'active');
+      // Use the atomic RPC so there is never a gap with zero active events
+      const { error } = await DB.setActiveEvent(id);
+      if (error) { toast(error.message, 'err'); return; }
       Ctx.set(id, name, 'active');
       toast('Event activated');
       renderNav('events');

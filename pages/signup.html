@@ -82,11 +82,27 @@
       document.getElementById('sub').textContent = 'You were invited — just choose a password to continue.';
     }
 
-    // If already signed in, just bounce
+    // If already signed in: active users go to the app; pending users see the
+    // waiting-for-approval message right here on the signup page.
     (async () => {
       await Auth.init();
-      if (Auth.signedIn()) location.replace('/');
+      if (!Auth.signedIn()) return;
+      if (Auth.isPending()) {
+        showPendingState();
+      } else {
+        location.replace('/');
+      }
     })();
+
+    function showPendingState() {
+      document.querySelector('.auth-title').textContent = 'Account pending approval';
+      document.querySelector('.auth-sub').textContent =
+        'Your account has been created, but a superuser needs to approve it before you can log in. You\'ll receive access once they approve your account.';
+      document.querySelector('.auth-info').style.display = 'none';
+      document.getElementById('signupForm').style.display = 'none';
+      document.querySelector('.auth-switch').innerHTML =
+        '<a href="/login" onclick="Auth.signOut();return false;">Sign out</a>';
+    }
 
     document.getElementById('signupForm').addEventListener('submit', async (ev) => {
       ev.preventDefault();
@@ -103,9 +119,14 @@
         toast('Check your email to confirm your account');
         return;
       }
-      toast('Account created');
-      // Redirect based on role (trigger has run by now)
+      // Trigger has run by now — reload the profile to check status
       await Auth.refresh();
+      if (Auth.isPending()) {
+        // No invite found: account created but needs superuser approval
+        showPendingState();
+        return;
+      }
+      toast('Account created');
       if (Auth.isRunner()) location.replace('/sales');
       else location.replace('/');
     });
