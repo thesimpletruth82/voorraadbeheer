@@ -103,7 +103,7 @@
     async function init() {
       [locations, skus] = await Promise.all([
         DB.getLocations(eventId),
-        DB.getSkus(),
+        DB.getSkus(eventId),
       ]);
 
       if (!locations.length || !skus.length) {

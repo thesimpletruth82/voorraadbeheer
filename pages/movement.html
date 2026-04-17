@@ -87,7 +87,7 @@
   <script>
     let eventId;
     (async () => {
-      if (!(await Auth.require({ allowRunner: true }))) return;
+      if (!(await Auth.require())) return;
       renderNav('movement');
       eventId = await Ctx.ensure();
       renderNav('movement');
@@ -117,7 +117,7 @@
     async function init() {
       const [locations, skus] = await Promise.all([
         DB.getLocations(eventId),
-        DB.getSkus(),
+        DB.getSkus(eventId),
       ]);
 
       if (!locations.length || !skus.length) {

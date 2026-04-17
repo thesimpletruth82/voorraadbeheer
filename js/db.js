@@ -44,25 +44,55 @@ const DB = {
   },
 
   // ── SKUs ────────────────────────────────────────────────
-  async getSkus() {
-    const { data } = await sb().from('skus').select('*').order('sort_order').order('name');
+  // Returns the assortment for a specific event, ordered by per-event sort_order.
+  async getSkus(eventId) {
+    const { data } = await sb()
+      .from('event_skus')
+      .select('sort_order, sku:skus(id, name, unit)')
+      .eq('event_id', eventId)
+      .order('sort_order');
+    return (data || []).map(r => ({ ...r.sku, sort_order: r.sort_order }));
+  },
+  // Full catalog of every SKU ever created — used for quick-add suggestions.
+  async getAllSkuCatalog() {
+    const { data } = await sb().from('skus').select('*').order('name');
     return data || [];
   },
-  async createSku(name, unit) {
-    // Get max sort_order to append at end
-    const { data: existing } = await sb().from('skus').select('sort_order').order('sort_order', { ascending: false }).limit(1);
-    const nextOrder = existing?.length ? (existing[0].sort_order || 0) + 1 : 0;
-    const { data, error } = await sb().from('skus').insert({ name, unit, sort_order: nextOrder }).select().single();
-    return { data, error };
+  // Create a brand-new SKU and add it to the event's assortment.
+  // If a SKU with the same name already exists in the catalog, reuse it.
+  async createSku(eventId, name, unit) {
+    let { data: existing } = await sb().from('skus').select('id').ilike('name', name).maybeSingle();
+    let skuId;
+    if (!existing) {
+      const { data: newSku, error } = await sb().from('skus').insert({ name, unit }).select().single();
+      if (error) return { error };
+      skuId = newSku.id;
+    } else {
+      skuId = existing.id;
+    }
+    return DB.addSkuToEvent(eventId, skuId);
   },
-  async deleteSku(id) {
-    const { error } = await sb().from('skus').delete().eq('id', id);
+  // Add an existing catalog SKU to an event's assortment.
+  async addSkuToEvent(eventId, skuId) {
+    const { data: maxRow } = await sb()
+      .from('event_skus').select('sort_order')
+      .eq('event_id', eventId)
+      .order('sort_order', { ascending: false }).limit(1);
+    const nextOrder = maxRow?.length ? (maxRow[0].sort_order + 1) : 0;
+    const { error } = await sb().from('event_skus')
+      .insert({ event_id: eventId, sku_id: skuId, sort_order: nextOrder });
     return { error };
   },
-  async reorderSkus(orderedIds) {
-    // orderedIds = array of SKU ids in desired order
-    const promises = orderedIds.map((id, i) =>
-      sb().from('skus').update({ sort_order: i }).eq('id', id)
+  // Remove a SKU from an event's assortment (does NOT delete it from the catalog).
+  async removeSkuFromEvent(eventId, skuId) {
+    const { error } = await sb().from('event_skus')
+      .delete().eq('event_id', eventId).eq('sku_id', skuId);
+    return { error };
+  },
+  // Update per-event sort order after a drag-to-reorder.
+  async reorderSkus(eventId, orderedIds) {
+    const promises = orderedIds.map((skuId, i) =>
+      sb().from('event_skus').update({ sort_order: i }).eq('event_id', eventId).eq('sku_id', skuId)
     );
     await Promise.all(promises);
   },
@@ -349,7 +379,7 @@ const DB = {
   async getVarianceData(eventId) {
     const [locations, skus, openingMap, closingMap, rawMovements] = await Promise.all([
       DB.getLocations(eventId),
-      DB.getSkus(),
+      DB.getSkus(eventId),
       DB.getCountMap(eventId, 'opening'),
       DB.getCountMap(eventId, 'closing'),
       (async () => {

@@ -22,6 +22,7 @@ DROP FUNCTION IF EXISTS has_event_access(uuid) CASCADE;
 
 DROP TABLE IF EXISTS invites           CASCADE;
 DROP TABLE IF EXISTS event_assignments CASCADE;
+DROP TABLE IF EXISTS event_skus        CASCADE;
 DROP TABLE IF EXISTS profiles          CASCADE;
 DROP TABLE IF EXISTS stock_counts      CASCADE;
 DROP TABLE IF EXISTS movements         CASCADE;
@@ -69,6 +70,17 @@ CREATE TABLE skus (
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Event SKUs (per-event assortment) -------------------------
+-- Links which SKUs are active for a given event, with per-event
+-- sort ordering. The global `skus` table is the full catalog.
+CREATE TABLE event_skus (
+  event_id   UUID NOT NULL REFERENCES events(id)  ON DELETE CASCADE,
+  sku_id     UUID NOT NULL REFERENCES skus(id)    ON DELETE CASCADE,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (event_id, sku_id)
+);
+CREATE INDEX ON event_skus(event_id);
 
 -- Stock counts (opening / closing) ---------------------------
 CREATE TABLE stock_counts (
@@ -119,7 +131,7 @@ CREATE TABLE event_assignments (
 CREATE TABLE invites (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   email         TEXT NOT NULL,
-  platform_role TEXT NOT NULL CHECK (platform_role IN ('superuser', 'admin', 'runner')),
+  platform_role TEXT NOT NULL CHECK (platform_role IN ('admin', 'runner')),
   event_id      UUID REFERENCES events(id) ON DELETE CASCADE,
   token         TEXT NOT NULL UNIQUE DEFAULT encode(gen_random_bytes(16), 'hex'),
   invited_by    UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -156,6 +168,8 @@ AS $$
   );
 $$;
 
+-- Runners implicitly have access to whichever event is currently 'active'.
+-- Admins/superusers keep their existing assignment-based access.
 CREATE OR REPLACE FUNCTION has_event_access(_event_id UUID)
 RETURNS BOOLEAN
 LANGUAGE SQL STABLE SECURITY DEFINER
@@ -166,6 +180,10 @@ AS $$
     OR EXISTS (
       SELECT 1 FROM event_assignments
       WHERE event_id = _event_id AND user_id = auth.uid()
+    )
+    OR (
+      current_platform_role() = 'runner'
+      AND EXISTS (SELECT 1 FROM events WHERE id = _event_id AND status = 'active')
     );
 $$;
 
@@ -224,6 +242,7 @@ CREATE TRIGGER on_auth_user_created
 ALTER TABLE events            ENABLE ROW LEVEL SECURITY;
 ALTER TABLE locations         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE skus              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE event_skus        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_counts      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE movements         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles          ENABLE ROW LEVEL SECURITY;
@@ -244,10 +263,12 @@ CREATE POLICY "assignments_superuser_all" ON event_assignments FOR ALL    USING 
 CREATE POLICY "invites_superuser_all" ON invites FOR ALL USING (is_superuser()) WITH CHECK (is_superuser());
 
 -- events -----------------------------------------------------
--- Read: superuser sees all; others see events they're assigned to
+-- Read: superuser sees all; admins see events they're assigned to;
+-- runners implicitly see whichever event is currently active.
 CREATE POLICY "events_read" ON events FOR SELECT USING (
   is_superuser()
   OR EXISTS (SELECT 1 FROM event_assignments WHERE event_id = events.id AND user_id = auth.uid())
+  OR (current_platform_role() = 'runner' AND status = 'active')
 );
 -- Create/delete: superuser only
 CREATE POLICY "events_superuser_insert" ON events FOR INSERT WITH CHECK (is_superuser());
@@ -267,30 +288,48 @@ CREATE POLICY "locations_admin_write" ON locations FOR ALL USING (
 );
 
 -- skus (global catalog) --------------------------------------
--- Any authenticated user with at least one event assignment can read
-CREATE POLICY "skus_read" ON skus FOR SELECT USING (
-  auth.uid() IS NOT NULL
-  AND (is_superuser() OR EXISTS (SELECT 1 FROM event_assignments WHERE user_id = auth.uid()))
-);
-CREATE POLICY "skus_admin_write" ON skus FOR ALL USING (
-  current_platform_role() IN ('superuser', 'admin')
-) WITH CHECK (
-  current_platform_role() IN ('superuser', 'admin')
-);
+-- Any signed-in user can read the catalog (admins need it for
+-- quick-add suggestions; runners read via event_skus join).
+CREATE POLICY "skus_read"        ON skus FOR SELECT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "skus_admin_write" ON skus FOR ALL
+  USING  (current_platform_role() IN ('superuser', 'admin'))
+  WITH CHECK (current_platform_role() IN ('superuser', 'admin'));
+
+-- event_skus (per-event assortment) --------------------------
+CREATE POLICY "event_skus_read" ON event_skus FOR SELECT
+  USING (has_event_access(event_id));
+CREATE POLICY "event_skus_admin_write" ON event_skus FOR ALL
+  USING (
+    is_superuser()
+    OR (current_platform_role() = 'admin' AND has_event_access(event_id))
+  )
+  WITH CHECK (
+    is_superuser()
+    OR (current_platform_role() = 'admin' AND has_event_access(event_id))
+  );
 
 -- stock_counts -----------------------------------------------
--- Any user with event access: full CRUD on counts for that event.
-CREATE POLICY "counts_read"  ON stock_counts FOR SELECT USING (has_event_access(event_id));
-CREATE POLICY "counts_write" ON stock_counts FOR ALL
-  USING      (has_event_access(event_id))
-  WITH CHECK (has_event_access(event_id));
+CREATE POLICY "counts_read" ON stock_counts FOR SELECT USING (has_event_access(event_id));
+CREATE POLICY "counts_admin_write" ON stock_counts FOR ALL USING (
+  is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
+) WITH CHECK (
+  is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
+);
 
 -- movements --------------------------------------------------
--- Any user with event access: full CRUD on movements for that event.
-CREATE POLICY "movements_read"  ON movements FOR SELECT USING (has_event_access(event_id));
-CREATE POLICY "movements_write" ON movements FOR ALL
-  USING      (has_event_access(event_id))
-  WITH CHECK (has_event_access(event_id));
+CREATE POLICY "movements_read" ON movements FOR SELECT USING (has_event_access(event_id));
+-- Admin: all operations on their events
+CREATE POLICY "movements_admin_all" ON movements FOR ALL USING (
+  is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
+) WITH CHECK (
+  is_superuser() OR (current_platform_role() = 'admin' AND has_event_access(event_id))
+);
+-- Runner: can only insert sale-type movements on their events
+CREATE POLICY "movements_runner_sales" ON movements FOR INSERT WITH CHECK (
+  current_platform_role() = 'runner'
+  AND type = 'sale'
+  AND has_event_access(event_id)
+);
 
 
 -- ─── 7. REALTIME ────────────────────────────────────────────

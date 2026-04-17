@@ -38,7 +38,7 @@
   <script>
     let eventId;
     (async () => {
-      if (!(await Auth.require({ allowRunner: true }))) return;
+      if (!(await Auth.require())) return;
       renderNav('closing');
       eventId = await Ctx.ensure();
       renderNav('closing');
@@ -55,7 +55,7 @@
     async function init() {
       [locations, skus, closingMap, expectedStock] = await Promise.all([
         DB.getLocations(eventId),
-        DB.getSkus(),
+        DB.getSkus(eventId),
         DB.getCountMap(eventId, 'closing'),
         DB.computeCurrentStock(eventId),
       ]);

@@ -23,14 +23,19 @@ const Ctx = {
     localStorage.removeItem('sf_ename');
     localStorage.removeItem('sf_estatus');
   },
-  // Auto-detect: if nothing in localStorage, fetch the active event from DB
+  // Auto-detect: if nothing in localStorage, fetch the active event from DB.
+  // Runners are always pinned to whichever event is currently active — we
+  // ignore their cached context so they follow along when a superuser/admin
+  // switches which event is live.
   async ensure() {
-    if (Ctx.id()) return Ctx.id();
+    const isRunner = typeof Auth !== 'undefined' && Auth.isRunner && Auth.isRunner();
+    if (!isRunner && Ctx.id()) return Ctx.id();
     const { data } = await sb().from('events').select('*').eq('status', 'active').limit(1).maybeSingle();
     if (data) {
       Ctx.set(data.id, data.name, data.status);
       return data.id;
     }
+    if (isRunner) Ctx.clear();
     return null;
   }
 };
@@ -65,18 +70,18 @@ function esc(s) {
 // Filters nav items based on the current user's role:
 //   • superuser : everything + Users admin
 //   • admin     : everything except Users admin
-//   • runner    : Opening/Closing Counts, Overview, Sales, Movement
+//   • runner    : Sales only
 //   • anonymous : brand only (used briefly before login redirect)
 function renderNav(activePage) {
   const pages = [
     { id: 'events',    label: 'Events',         icon: 'calendar',         href: '/',                             roles: ['superuser', 'admin'] },
     { id: 'locations', label: 'Locations',      icon: 'map-pin',          href: '/pages/setup-locations.html', section: 'Setup', roles: ['superuser', 'admin'] },
     { id: 'skus',      label: 'Products',       icon: 'package',          href: '/pages/setup-skus.html',       roles: ['superuser', 'admin'] },
-    { id: 'opening',   label: 'Opening Count',  icon: 'clipboard-list',   href: '/pages/opening.html', section: 'Counts', roles: ['superuser', 'admin', 'runner'] },
-    { id: 'closing',   label: 'Closing Count',  icon: 'clipboard-check',  href: '/pages/closing.html',          roles: ['superuser', 'admin', 'runner'] },
-    { id: 'overview',  label: 'Live Overview',  icon: 'activity',         href: '/pages/overview.html', section: 'Operations', roles: ['superuser', 'admin', 'runner'] },
+    { id: 'opening',   label: 'Opening Count',  icon: 'clipboard-list',   href: '/pages/opening.html', section: 'Counts', roles: ['superuser', 'admin'] },
+    { id: 'closing',   label: 'Closing Count',  icon: 'clipboard-check',  href: '/pages/closing.html',          roles: ['superuser', 'admin'] },
+    { id: 'overview',  label: 'Live Overview',  icon: 'activity',         href: '/pages/overview.html', section: 'Operations', roles: ['superuser', 'admin'] },
     { id: 'sales',     label: 'Sales',          icon: 'shopping-cart',    href: '/pages/sales.html',            roles: ['superuser', 'admin', 'runner'] },
-    { id: 'movement',  label: 'Log Movement',   icon: 'truck',            href: '/pages/movement.html',         roles: ['superuser', 'admin', 'runner'] },
+    { id: 'movement',  label: 'Log Movement',   icon: 'truck',            href: '/pages/movement.html',         roles: ['superuser', 'admin'] },
     { id: 'variance',  label: 'Variance Report',icon: 'bar-chart-2',      href: '/pages/variance.html', section: 'Reports', roles: ['superuser', 'admin'] },
     { id: 'users',     label: 'Users & Roles',  icon: 'users',            href: '/pages/users.html',    section: 'Admin',   roles: ['superuser'] },
   ];
@@ -134,7 +139,7 @@ function renderNav(activePage) {
 
   // Bottom bar (mobile) — pick up to 4 role-appropriate pages
   const bottomIds = role === 'runner'
-    ? ['overview', 'sales', 'movement', 'closing']
+    ? ['sales']
     : ['overview', 'sales', 'movement', 'events'];
   const bottomPages = bottomIds
     .map(id => visible.find(p => p.id === id))

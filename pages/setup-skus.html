@@ -31,36 +31,31 @@
       cursor: grabbing;
       border-radius: 8px;
     }
-    .sku-row.drag-over {
-      border-top: 2px solid var(--accent);
-    }
+    .sku-row.drag-over { border-top: 2px solid var(--accent); }
     .drag-handle {
-      color: var(--text4);
-      flex-shrink: 0;
-      cursor: grab;
-      display: flex;
-      align-items: center;
+      color: var(--text4); flex-shrink: 0; cursor: grab;
+      display: flex; align-items: center;
     }
     .drag-handle svg { width: 16px; height: 16px; }
-    .sku-order {
-      font-size: 11px;
-      color: var(--text4);
-      width: 22px;
-      text-align: center;
-      flex-shrink: 0;
+    .sku-order { font-size: 11px; color: var(--text4); width: 22px; text-align: center; flex-shrink: 0; }
+    .sku-name  { flex: 1; font-size: 13px; font-weight: 600; color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sku-unit  { flex-shrink: 0; }
+    .sku-del   { flex-shrink: 0; }
+
+    /* Catalog suggestion chips */
+    .catalog-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .catalog-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 10px;
+      background: var(--bg-input);
+      border: 1px solid var(--border2);
+      border-radius: 20px;
+      font-size: 12px; color: var(--text2);
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
     }
-    .sku-name {
-      flex: 1;
-      font-size: 13px;
-      font-weight: 600;
-      color: var(--text);
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .sku-unit { flex-shrink: 0; }
-    .sku-del { flex-shrink: 0; }
+    .catalog-chip:hover { border-color: var(--accent); background: rgba(59,130,246,.1); color: var(--accent); }
+    .catalog-chip i { width: 12px; height: 12px; }
   </style>
 </head>
 <body>
@@ -68,31 +63,53 @@
     <nav class="sidebar" id="sidebar"></nav>
     <div class="main">
       <div class="page-header">
-        <h1>Products (SKUs)</h1>
-        <p>Drag to reorder. This order is used across Sales, Overview, Counts, and Reports.</p>
+        <h1>Products</h1>
+        <p>Assortment for this event. Drag to reorder — order is used across Sales, Counts &amp; Reports.</p>
       </div>
       <div class="page-body">
-        <div class="card mb-6">
-          <div class="card-title"><i data-lucide="plus-circle"></i> Add Product</div>
-          <form id="addForm" class="form-row" style="align-items:flex-end; gap:10px;">
-            <div class="form-group" style="flex:2; margin-bottom:0;">
-              <label>Product Name</label>
-              <input type="text" id="skuName" placeholder="e.g. Heineken 33cl" required>
-            </div>
-            <div class="form-group" style="flex:1; margin-bottom:0;">
-              <label>Unit</label>
-              <select id="skuUnit">
-                <option value="liters">Liters</option>
-                <option value="tray">Tray</option>
-                <option value="bottle">Bottle</option>
-                <option value="box">Box</option>
-              </select>
-            </div>
-            <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Add</button>
-          </form>
+
+        <!-- No event selected -->
+        <div id="noEvent" class="empty-state hidden">
+          <i data-lucide="calendar"></i>
+          <h3>No active event</h3>
+          <p>Activate an event on the <a href="/">Events page</a> first.</p>
         </div>
 
-        <div id="skuList"></div>
+        <div id="content" class="hidden">
+          <!-- Add new product -->
+          <div class="card mb-6">
+            <div class="card-title"><i data-lucide="plus-circle"></i> New Product</div>
+            <form id="addForm" class="form-row" style="align-items:flex-end; gap:10px;">
+              <div class="form-group" style="flex:2; margin-bottom:0;">
+                <label>Product Name</label>
+                <input type="text" id="skuName" placeholder="e.g. Heineken 33cl" required>
+              </div>
+              <div class="form-group" style="flex:1; margin-bottom:0;">
+                <label>Unit</label>
+                <select id="skuUnit">
+                  <option value="pcs">Pcs</option>
+                  <option value="liters">Liters</option>
+                  <option value="tray">Tray</option>
+                  <option value="bottle">Bottle</option>
+                  <option value="box">Box</option>
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary"><i data-lucide="plus"></i> Add</button>
+            </form>
+
+            <!-- Previously used SKUs from catalog -->
+            <div id="catalogSection" class="hidden" style="margin-top:16px; padding-top:14px; border-top: 1px solid var(--border);">
+              <div style="font-size:12px; color:var(--text3); margin-bottom:4px;">
+                <i data-lucide="history" style="width:12px;height:12px;vertical-align:middle;"></i>
+                Previously used — click to add:
+              </div>
+              <div class="catalog-chips" id="catalogChips"></div>
+            </div>
+          </div>
+
+          <!-- Current event SKUs -->
+          <div id="skuList"></div>
+        </div>
       </div>
     </div>
     <nav class="bottombar" id="bottombar"></nav>
@@ -102,26 +119,28 @@
   <script src="/js/auth.js"></script>
   <script src="/js/db.js"></script>
   <script>
-    let skus = [];
-    let dragSrcId = null;
+    let eventId, skus = [], catalog = [], dragSrcId = null;
 
     async function loadSkus() {
-      skus = await DB.getSkus();
+      [skus, catalog] = await Promise.all([
+        DB.getSkus(eventId),
+        DB.getAllSkuCatalog(),
+      ]);
       render();
+      renderCatalog();
     }
 
+    // ── Current assortment ──────────────────────────────
     function render() {
       const $list = document.getElementById('skuList');
-
       if (!skus.length) {
-        $list.innerHTML = `<div class="empty-state"><i data-lucide="package"></i><h3>No products yet</h3><p>Add your first product above.</p></div>`;
+        $list.innerHTML = `<div class="empty-state"><i data-lucide="package"></i><h3>No products yet</h3><p>Add your first product above, or pick from previously used ones.</p></div>`;
         lucide.createIcons();
         return;
       }
-
       $list.innerHTML = `
         <div class="card">
-          <div class="card-title"><i data-lucide="package"></i> ${skus.length} Product${skus.length > 1 ? 's' : ''}</div>
+          <div class="card-title"><i data-lucide="package"></i> ${skus.length} Product${skus.length !== 1 ? 's' : ''}</div>
           <div class="sku-list" id="skuSortable">
             ${skus.map((s, i) => `
               <div class="sku-row" draggable="true" data-id="${s.id}">
@@ -130,7 +149,9 @@
                 <div class="sku-name">${esc(s.name)}</div>
                 <div class="sku-unit"><span class="badge badge-blue">${esc(s.unit)}</span></div>
                 <div class="sku-del">
-                  <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); delSku('${s.id}')"><i data-lucide="trash-2"></i></button>
+                  <button class="btn btn-sm btn-danger" onclick="event.stopPropagation(); removeSku('${s.id}')">
+                    <i data-lucide="trash-2"></i>
+                  </button>
                 </div>
               </div>
             `).join('')}
@@ -140,21 +161,65 @@
       initDrag();
     }
 
-    // ── Drag & Drop ─────────────────────────────────
-    function initDrag() {
-      const rows = document.querySelectorAll('.sku-row[draggable]');
-      rows.forEach(row => {
-        row.addEventListener('dragstart', onDragStart);
-        row.addEventListener('dragend', onDragEnd);
-        row.addEventListener('dragover', onDragOver);
-        row.addEventListener('dragenter', onDragEnter);
-        row.addEventListener('dragleave', onDragLeave);
-        row.addEventListener('drop', onDrop);
+    // ── Previously-used catalog chips ───────────────────
+    function renderCatalog() {
+      const inEvent = new Set(skus.map(s => s.id));
+      const suggestions = catalog.filter(s => !inEvent.has(s.id));
+      const $section = document.getElementById('catalogSection');
+      const $chips   = document.getElementById('catalogChips');
+      if (!suggestions.length) { $section.classList.add('hidden'); return; }
+      $section.classList.remove('hidden');
+      $chips.innerHTML = suggestions.map(s => `
+        <span class="catalog-chip" onclick="quickAdd('${s.id}')">
+          <i data-lucide="plus"></i>${esc(s.name)} <span style="opacity:.6">${esc(s.unit)}</span>
+        </span>`).join('');
+      lucide.createIcons();
+    }
 
-        // Touch support
+    async function quickAdd(skuId) {
+      const { error } = await DB.addSkuToEvent(eventId, skuId);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('Product added');
+      loadSkus();
+    }
+
+    // ── Add new product ─────────────────────────────────
+    document.getElementById('addForm').addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const name = document.getElementById('skuName').value.trim();
+      const unit = document.getElementById('skuUnit').value;
+      if (!name) return;
+      const btn = ev.target.querySelector('button[type="submit"]');
+      btn.disabled = true;
+      const { error } = await DB.createSku(eventId, name, unit);
+      btn.disabled = false;
+      if (error) { toast(error.message, 'err'); return; }
+      toast('Product added');
+      document.getElementById('skuName').value = '';
+      loadSkus();
+    });
+
+    // ── Remove from this event (keeps catalog entry) ────
+    async function removeSku(skuId) {
+      if (!confirm('Remove this product from the event? It stays in the catalog for future events.')) return;
+      const { error } = await DB.removeSkuFromEvent(eventId, skuId);
+      if (error) { toast(error.message, 'err'); return; }
+      toast('Product removed from event');
+      loadSkus();
+    }
+
+    // ── Drag & Drop ─────────────────────────────────────
+    function initDrag() {
+      document.querySelectorAll('.sku-row[draggable]').forEach(row => {
+        row.addEventListener('dragstart',  onDragStart);
+        row.addEventListener('dragend',    onDragEnd);
+        row.addEventListener('dragover',   onDragOver);
+        row.addEventListener('dragenter',  onDragEnter);
+        row.addEventListener('dragleave',  onDragLeave);
+        row.addEventListener('drop',       onDrop);
         row.addEventListener('touchstart', onTouchStart, { passive: false });
-        row.addEventListener('touchmove', onTouchMove, { passive: false });
-        row.addEventListener('touchend', onTouchEnd);
+        row.addEventListener('touchmove',  onTouchMove,  { passive: false });
+        row.addEventListener('touchend',   onTouchEnd);
       });
     }
 
@@ -163,145 +228,89 @@
       e.currentTarget.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
     }
-
     function onDragEnd(e) {
       e.currentTarget.classList.remove('dragging');
       document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
     }
-
-    function onDragOver(e) {
-      e.preventDefault();
-      e.dataTransfer.dropEffect = 'move';
-    }
-
-    function onDragEnter(e) {
-      e.preventDefault();
-      const row = e.currentTarget;
-      if (row.dataset.id !== dragSrcId) row.classList.add('drag-over');
-    }
-
-    function onDragLeave(e) {
-      e.currentTarget.classList.remove('drag-over');
-    }
+    function onDragOver(e)  { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+    function onDragEnter(e) { e.preventDefault(); if (e.currentTarget.dataset.id !== dragSrcId) e.currentTarget.classList.add('drag-over'); }
+    function onDragLeave(e) { e.currentTarget.classList.remove('drag-over'); }
 
     async function onDrop(e) {
       e.preventDefault();
       const targetId = e.currentTarget.dataset.id;
       e.currentTarget.classList.remove('drag-over');
       if (!dragSrcId || dragSrcId === targetId) return;
-
-      // Reorder in local array
       const fromIdx = skus.findIndex(s => s.id === dragSrcId);
-      const toIdx = skus.findIndex(s => s.id === targetId);
+      const toIdx   = skus.findIndex(s => s.id === targetId);
       const [moved] = skus.splice(fromIdx, 1);
       skus.splice(toIdx, 0, moved);
-
       render();
-      await DB.reorderSkus(skus.map(s => s.id));
+      await DB.reorderSkus(eventId, skus.map(s => s.id));
       dragSrcId = null;
     }
 
-    // ── Touch drag support ──────────────────────────
+    // ── Touch drag ──────────────────────────────────────
     let touchRow = null, touchClone = null, touchStartY = 0;
 
     function onTouchStart(e) {
-      // Only drag from the handle area
-      const handle = e.target.closest('.drag-handle');
-      if (!handle) return;
-
+      if (!e.target.closest('.drag-handle')) return;
       e.preventDefault();
-      touchRow = e.currentTarget;
-      dragSrcId = touchRow.dataset.id;
+      touchRow   = e.currentTarget;
+      dragSrcId  = touchRow.dataset.id;
       touchStartY = e.touches[0].clientY;
-
       touchClone = touchRow.cloneNode(true);
-      touchClone.style.position = 'fixed';
-      touchClone.style.left = touchRow.getBoundingClientRect().left + 'px';
-      touchClone.style.width = touchRow.offsetWidth + 'px';
-      touchClone.style.top = touchRow.getBoundingClientRect().top + 'px';
-      touchClone.style.zIndex = '9999';
-      touchClone.style.opacity = '.85';
-      touchClone.style.boxShadow = '0 8px 24px rgba(0,0,0,.4), 0 0 0 1px var(--accent)';
-      touchClone.style.borderRadius = '8px';
-      touchClone.style.pointerEvents = 'none';
+      Object.assign(touchClone.style, {
+        position: 'fixed', zIndex: '9999', opacity: '.85', pointerEvents: 'none',
+        borderRadius: '8px', boxShadow: '0 8px 24px rgba(0,0,0,.4), 0 0 0 1px var(--accent)',
+        left: touchRow.getBoundingClientRect().left + 'px',
+        top:  touchRow.getBoundingClientRect().top  + 'px',
+        width: touchRow.offsetWidth + 'px',
+      });
       document.body.appendChild(touchClone);
-
       touchRow.style.opacity = '.3';
     }
 
     function onTouchMove(e) {
       if (!touchClone) return;
       e.preventDefault();
-
       const y = e.touches[0].clientY;
-      const deltaY = y - touchStartY;
-      const origTop = touchRow.getBoundingClientRect().top;
-      touchClone.style.top = (origTop + deltaY) + 'px';
-
-      // Highlight target
+      touchClone.style.top = (touchRow.getBoundingClientRect().top + (y - touchStartY)) + 'px';
       document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-      const target = document.elementFromPoint(e.touches[0].clientX, y);
-      const targetRow = target?.closest('.sku-row[draggable]');
-      if (targetRow && targetRow.dataset.id !== dragSrcId) {
-        targetRow.classList.add('drag-over');
-      }
+      const target = document.elementFromPoint(e.touches[0].clientX, y)?.closest('.sku-row[draggable]');
+      if (target && target.dataset.id !== dragSrcId) target.classList.add('drag-over');
     }
 
     async function onTouchEnd(e) {
       if (!touchClone) return;
-
-      // Find drop target
       document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
-      const lastTouch = e.changedTouches[0];
-      const target = document.elementFromPoint(lastTouch.clientX, lastTouch.clientY);
-      const targetRow = target?.closest('.sku-row[draggable]');
-
+      const last   = e.changedTouches[0];
+      const target = document.elementFromPoint(last.clientX, last.clientY)?.closest('.sku-row[draggable]');
       touchRow.style.opacity = '';
-      touchClone.remove();
-      touchClone = null;
-
-      if (targetRow && targetRow.dataset.id !== dragSrcId) {
+      touchClone.remove(); touchClone = null;
+      if (target && target.dataset.id !== dragSrcId) {
         const fromIdx = skus.findIndex(s => s.id === dragSrcId);
-        const toIdx = skus.findIndex(s => s.id === targetRow.dataset.id);
+        const toIdx   = skus.findIndex(s => s.id === target.dataset.id);
         const [moved] = skus.splice(fromIdx, 1);
         skus.splice(toIdx, 0, moved);
-
         render();
-        await DB.reorderSkus(skus.map(s => s.id));
+        await DB.reorderSkus(eventId, skus.map(s => s.id));
       }
-
-      touchRow = null;
-      dragSrcId = null;
+      touchRow = null; dragSrcId = null;
     }
 
-    // ── Add / Delete ────────────────────────────────
-    document.getElementById('addForm').addEventListener('submit', async (ev) => {
-      ev.preventDefault();
-      const name = document.getElementById('skuName').value.trim();
-      const unit = document.getElementById('skuUnit').value;
-      if (!name) return;
-      const btn = ev.target.querySelector('button[type="submit"]');
-      btn.disabled = true;
-      const { error } = await DB.createSku(name, unit);
-      btn.disabled = false;
-      if (error) { toast(error.message, 'err'); return; }
-      toast('Product added');
-      document.getElementById('skuName').value = '';
-      loadSkus();
-    });
-
-    async function delSku(id) {
-      if (!confirm('Delete this product?')) return;
-      const { error } = await DB.deleteSku(id);
-      if (error) { toast(error.message, 'err'); return; }
-      toast('Product deleted');
-      loadSkus();
-    }
-
+    // ── Init ────────────────────────────────────────────
     (async () => {
       if (!(await Auth.require())) return;
       renderNav('skus');
-      loadSkus();
+      eventId = await Ctx.ensure();
+      renderNav('skus');
+      if (!eventId) {
+        document.getElementById('noEvent').classList.remove('hidden');
+      } else {
+        document.getElementById('content').classList.remove('hidden');
+        loadSkus();
+      }
     })();
   </script>
 </body>
